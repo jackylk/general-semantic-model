@@ -38,3 +38,13 @@ def test_worker_runs_persistent_task_and_does_not_repeat_completed_job():
     assert worker.run(p,kb,task['id'])['checkpoint']=={'answer':3}
     assert worker.run(p,kb,task['id'])['status']=='succeeded'
     assert calls==[2]
+
+
+def test_retryable_failure_requeues_same_task_and_preserves_checkpoint():
+    store=Store(Settings.load());store.migrate();kb=str(uuid4());p=Principal('developer',frozenset([kb]));store.create_kb(p,kb,'retry')
+    tasks=TaskService(store);task=tasks.submit(p,kb,'parse',{},'retry-1')
+    tasks.checkpoint(p,kb,task['id'],'parsed',{'blocks':2})
+    tasks.fail(p,kb,task['id'],'TEMPORARY','temporary',True)
+    retried=tasks.retry(p,kb,task['id'])
+    assert retried['id']==task['id'] and retried['status']=='queued'
+    assert retried['checkpoint']=={'blocks':2}

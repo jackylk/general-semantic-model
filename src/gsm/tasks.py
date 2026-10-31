@@ -45,3 +45,12 @@ class TaskService:
         with self.store.transaction(principal,kb_id) as conn:
             cursor=conn.execute("UPDATE tasks SET status='failed',error=%s,updated_at=now() WHERE kb_id=%s AND id=%s",(Jsonb({'code':code,'message':message,'retryable':retryable}),kb_id,task_id))
             if not cursor.rowcount: raise ProductError('NOT_FOUND','任务不存在或无权限')
+
+    def retry(self,principal,kb_id,task_id):
+        principal.require(kb_id,write=True)
+        with self.store.transaction(principal,kb_id) as conn:
+            row=conn.execute('SELECT status,error FROM tasks WHERE kb_id=%s AND id=%s FOR UPDATE',(kb_id,task_id)).fetchone()
+            if not row or row[0]!='failed' or not (row[1] or {}).get('retryable'):
+                raise ProductError('NOT_RETRYABLE','任务不是可重试的失败状态')
+            conn.execute("UPDATE tasks SET status='queued',error=NULL,updated_at=now() WHERE kb_id=%s AND id=%s",(kb_id,task_id))
+        return self.get(principal,kb_id,task_id)

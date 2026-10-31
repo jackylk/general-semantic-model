@@ -1,0 +1,323 @@
+[
+  {
+    "name": "describe_kb",
+    "description": "查看授权知识库范围、当前发布版及能力限制。",
+    "inputSchema": {
+      "properties": {
+        "kb_id": {
+          "title": "Kb Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kb_id"
+      ],
+      "title": "describe_kbArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "get_release",
+    "description": "",
+    "inputSchema": {
+      "properties": {
+        "kb_id": {
+          "title": "Kb Id",
+          "type": "string"
+        },
+        "release_id": {
+          "title": "Release Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kb_id",
+        "release_id"
+      ],
+      "title": "get_releaseArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "get_definitions",
+    "description": "",
+    "inputSchema": {
+      "properties": {
+        "kb_id": {
+          "title": "Kb Id",
+          "type": "string"
+        },
+        "release_id": {
+          "title": "Release Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kb_id",
+        "release_id"
+      ],
+      "title": "get_definitionsArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "query_records",
+    "description": "",
+    "inputSchema": {
+      "properties": {
+        "kb_id": {
+          "title": "Kb Id",
+          "type": "string"
+        },
+        "release_id": {
+          "title": "Release Id",
+          "type": "string"
+        },
+        "kind": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Kind"
+        },
+        "subject": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Subject"
+        },
+        "predicate": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Predicate"
+        },
+        "conditions": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Conditions"
+        },
+        "limit": {
+          "default": 100,
+          "title": "Limit",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kb_id",
+        "release_id"
+      ],
+      "title": "query_recordsArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "query_paths",
+    "description": "",
+    "inputSchema": {
+      "properties": {
+        "kb_id": {
+          "title": "Kb Id",
+          "type": "string"
+        },
+        "release_id": {
+          "title": "Release Id",
+          "type": "string"
+        },
+        "start": {
+          "title": "Start",
+          "type": "string"
+        },
+        "target": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Target"
+        },
+        "max_depth": {
+          "default": 3,
+          "title": "Max Depth",
+          "type": "integer"
+        },
+        "limit": {
+          "default": 20,
+          "title": "Limit",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kb_id",
+        "release_id",
+        "start"
+      ],
+      "title": "query_pathsArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "search",
+    "description": "",
+    "inputSchema": {
+      "properties": {
+        "kb_id": {
+          "title": "Kb Id",
+          "type": "string"
+        },
+        "release_id": {
+          "title": "Release Id",
+          "type": "string"
+        },
+        "query": {
+          "title": "Query",
+          "type": "string"
+        },
+        "limit": {
+          "default": 10,
+          "title": "Limit",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kb_id",
+        "release_id",
+        "query"
+      ],
+      "title": "searchArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "read_evidence",
+    "description": "",
+    "inputSchema": {
+      "properties": {
+        "kb_id": {
+          "title": "Kb Id",
+          "type": "string"
+        },
+        "release_id": {
+          "title": "Release Id",
+          "type": "string"
+        },
+        "evidence_id": {
+          "title": "Evidence Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kb_id",
+        "release_id",
+        "evidence_id"
+      ],
+      "title": "read_evidenceArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "get_wiki",
+    "description": "",
+    "inputSchema": {
+      "properties": {
+        "kb_id": {
+          "title": "Kb Id",
+          "type": "string"
+        },
+        "release_id": {
+          "title": "Release Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kb_id",
+        "release_id"
+      ],
+      "title": "get_wikiArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "retrieve",
+    "description": "",
+    "inputSchema": {
+      "properties": {
+        "kb_id": {
+          "title": "Kb Id",
+          "type": "string"
+        },
+        "release_id": {
+          "title": "Release Id",
+          "type": "string"
+        },
+        "question": {
+          "title": "Question",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kb_id",
+        "release_id",
+        "question"
+      ],
+      "title": "retrieveArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "submit_feedback",
+    "description": "",
+    "inputSchema": {
+      "properties": {
+        "kb_id": {
+          "title": "Kb Id",
+          "type": "string"
+        },
+        "release_id": {
+          "title": "Release Id",
+          "type": "string"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kb_id",
+        "release_id",
+        "message"
+      ],
+      "title": "submit_feedbackArguments",
+      "type": "object"
+    }
+  }
+]

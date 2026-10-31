@@ -110,3 +110,30 @@ def test_object_reference_property_must_resolve_to_allowed_object_type(build_env
     data=candidates(block)[:2]+[{'kind':'assertion','subject':'a','predicate':'parent','value':'missing','evidence':[{'block_id':block,'quote':'设备 A'}]}]
     result=b.ingest(p,kb,dv,data)
     assert result['candidates'][-1]['status']=='candidate'
+
+
+def test_extraction_repairs_invalid_quantity_before_returning(build_env,tmp_path):
+    from gsm.application import Application
+    from gsm.adapters.llm import Completion
+    import json
+    store,b,review,p,kb,dv,block=build_env
+    from gsm.credentials import write_credentials
+    profile=tmp_path/'profile.json';write_credentials(profile,'developer',[kb])
+    app=Application(profile);app.store=store;app.build=b
+    class Model:
+        n=0
+        def complete(self,*args,**kwargs):
+            self.n+=1;data=candidates(block)
+            if self.n==1:data[-1]['value']='10.25'
+            return Completion({'candidates':data},'test',{'total_tokens':10})
+    result=app.extract_candidates(kb,dv,[{'block_id':block,'text':'test'}],Model())
+    assert result['attempts']==2
+    assert result['result']['candidates'][-1]['status']=='verified'
+
+
+def test_source_statement_cannot_attach_unstated_number_to_real_quote(build_env):
+    store,b,review,p,kb,dv,block=build_env
+    data=candidates(block);data[-1]['value']['value']='999'
+    result=b.ingest(p,kb,dv,data)
+    assert 'VALUE_NOT_IN_EVIDENCE' in {i['code'] for i in result['candidates'][-1]['issues']}
+    with pytest.raises(ProductError):review.decide(p,kb,[result['candidates'][-1]['id']],'confirm','approve')

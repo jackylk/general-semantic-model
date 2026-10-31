@@ -3,7 +3,7 @@ from hashlib import sha256
 from pathlib import Path
 from decimal import Decimal,InvalidOperation
 from datetime import date
-import json
+import json,re
 from pydantic import Field,ValidationError
 from psycopg.types.json import Jsonb
 from .domain import StrictModel,validate_domain
@@ -161,7 +161,7 @@ class BuildService:
                         for code in value_issues(value,conds[key]): add(code)
                 if c.kind=='assertion' and not any(i['fatal'] for i in issues):
                     previous=conn.execute("SELECT id,payload FROM records WHERE kb_id=%s AND kind='assertion' AND payload->>'subject'=%s AND payload->>'predicate'=%s",(kb_id,payload.get('subject'),c.predicate)).fetchall()
-                    conflicting=[str(rid) for rid,old in previous if old.get('conditions',{})==c.conditions and old.get('valid_from')==c.valid_from and old.get('valid_to')==c.valid_to and old.get('value')!=c.value]
+                    conflicting=[str(rid) for rid,old in previous if not any(i.get('fatal') for i in old.get('issues',[])) and old.get('conditions',{})==c.conditions and old.get('valid_from')==c.valid_from and old.get('valid_to')==c.valid_to and old.get('value')!=c.value]
                     if conflicting:
                         add('CONFLICT',False)
                         payload['conflicting_record_ids']=conflicting
@@ -170,6 +170,16 @@ class BuildService:
                     row=conn.execute('SELECT text FROM source_blocks WHERE kb_id=%s AND id=%s',(kb_id,e.block_id)).fetchone()
                     if not row or e.quote not in row[0]: add('EVIDENCE_NOT_LOCATED')
                     else: links.append((e,row[0].index(e.quote)))
+                if c.kind=='assertion' and c.provenance in ('source_statement','observation'):
+                    definition=props.get(c.predicate)
+                    if definition and definition.value_type in ('quantity','decimal') and not value_issues(c.value,definition):
+                        number=c.value['value'] if definition.value_type=='quantity' else c.value
+                        quoted_numbers=set()
+                        for evidence,_ in links:
+                            for token in re.findall(r'[-+]?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?',evidence.quote):
+                                try:quoted_numbers.add(Decimal(token))
+                                except InvalidOperation:pass
+                        if Decimal(str(number)) not in quoted_numbers:add('VALUE_NOT_IN_EVIDENCE')
                 if not links: add('EVIDENCE_REQUIRED')
                 payload['issues']=issues;status='candidate' if issues else 'verified'
                 record_id=str(conn.execute('INSERT INTO records(kb_id,kind,payload,status) VALUES(%s,%s,%s,%s) RETURNING id',(kb_id,c.kind if c.kind in ('object','assertion','relation','event','rule') else 'assertion',Jsonb(payload),status)).fetchone()[0])
@@ -201,13 +211,21 @@ class BuildService:
                 texts.append(names.get(predicate,'')+' '+json.dumps(payload,ensure_ascii=False,sort_keys=True))
                 for e in conn.execute('SELECT id FROM evidence_links WHERE kb_id=%s AND record_id=%s',(kb_id,rid)).fetchall():
                     citations.append({'record_id':str(rid),'evidence_id':str(e[0])})
+        with self.store.transaction(principal,kb_id) as conn:
+            source_blocks=conn.execute('''SELECT DISTINCT b.id,b.text FROM source_blocks b WHERE b.kb_id=%s AND b.parse_version_id IN (
+                SELECT b2.parse_version_id FROM evidence_links e JOIN source_blocks b2 ON b2.kb_id=e.kb_id AND b2.id=e.block_id
+                WHERE e.kb_id=%s AND e.record_id=ANY(%s::uuid[]))''',(kb_id,kb_id,record_ids)).fetchall()
         vectors=Embedding().embed(texts) if embed else [None]*len(texts)
+        source_vectors=Embedding().embed([r[1] for r in source_blocks]) if embed else [None]*len(source_blocks)
         build_id=ReleaseService(self.store).stage(principal,kb_id,record_ids,ready=False)
         with self.store.transaction(principal,kb_id) as conn:
             for row,text,vector in zip(rows,texts,vectors):
                 encoded='['+','.join(map(str,vector))+']' if vector is not None else None
                 conn.execute("INSERT INTO search_documents(kb_id,build_id,record_id,text,tokens,embedding) VALUES(%s,%s,%s,%s,to_tsvector('simple',%s),%s::vector)",(kb_id,build_id,row[0],text,tokenize(text),encoded))
+            for row,vector in zip(source_blocks,source_vectors):
+                encoded='['+','.join(map(str,vector))+']' if vector is not None else None
+                conn.execute("INSERT INTO source_search_documents(kb_id,build_id,block_id,text,tokens,embedding) VALUES(%s,%s,%s,%s,to_tsvector('simple',%s),%s::vector)",(kb_id,build_id,row[0],row[1],tokenize(row[1]),encoded))
             from .wiki import render_wiki
             wiki=render_wiki(rows,domain,citations)
-            conn.execute('UPDATE builds SET ready=true,manifest=%s WHERE kb_id=%s AND id=%s',(Jsonb({'domain_version_id':domain_version_id,'wiki':wiki,'vector_ready':embed}),kb_id,build_id))
+            conn.execute('UPDATE builds SET ready=true,manifest=%s WHERE kb_id=%s AND id=%s',(Jsonb({'domain_version_id':domain_version_id,'wiki':wiki,'vector_ready':embed,'baseline_block_ids':[str(r[0]) for r in source_blocks]}),kb_id,build_id))
         return build_id

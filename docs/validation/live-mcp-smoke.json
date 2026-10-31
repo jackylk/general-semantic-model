@@ -1,0 +1,225 @@
+{
+  "scope": "live model, synthetic source, public MCP smoke; not independent user/domain acceptance",
+  "kb_id": "ba6d5b6e-5227-4e2c-9694-ddf2017447fe",
+  "release_id": "613cad6f-b73b-4c13-897a-5ee6b8517013",
+  "candidate_count": 2,
+  "search_hits": 2,
+  "answer": {
+    "answer": "工号 E001 对应员工张三；在适用地区为上海这一条件下，该员工月度补贴为 100.50 CNY。",
+    "status": "supported",
+    "citations": [
+      "44ea9695-1f8a-42e3-801f-9ec4fb90df90",
+      "b315c139-7dcf-424d-b58b-de320d47e270"
+    ],
+    "kb_id": "ba6d5b6e-5227-4e2c-9694-ddf2017447fe",
+    "release_id": "613cad6f-b73b-4c13-897a-5ee6b8517013",
+    "trace": [
+      {
+        "plan": {
+          "action": "search",
+          "args": {
+            "query": "上海地区 月度补贴 工号 E001 员工 适用 标准"
+          }
+        },
+        "executed": true,
+        "usage": {
+          "prompt_tokens": 254,
+          "completion_tokens": 27,
+          "total_tokens": 281,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          },
+          "prompt_cache_hit_tokens": 0,
+          "prompt_cache_miss_tokens": 254
+        },
+        "result": [
+          {
+            "id": "418dba27-e198-476e-a73c-32a59bd0dfda",
+            "kind": "assertion",
+            "payload": {
+              "kind": "assertion",
+              "name": "",
+              "value": {
+                "unit": "CNY",
+                "value": "100.50"
+              },
+              "issues": [],
+              "object": null,
+              "subject": "8b9c55a9cc140d36386e2725c5b57b265d89b0f5b819fd34afe0084e9c34fe76",
+              "type_id": null,
+              "evidence": [
+                {
+                  "quote": "适用地区为上海时，该员工月度补贴为 100.50 CNY。",
+                  "block_id": "f690c6c3-ed9f-4d16-9ba7-17a785124665"
+                }
+              ],
+              "identity": {},
+              "local_id": "a1",
+              "valid_to": null,
+              "predicate": "allowance",
+              "conditions": {
+                "region": "上海"
+              },
+              "provenance": "source_statement",
+              "valid_from": null,
+              "participants": [],
+              "domain_version_id": "e395fb8f-fc3f-4684-8c6d-550fa1a56a37"
+            },
+            "evidence_ids": [
+              "44ea9695-1f8a-42e3-801f-9ec4fb90df90"
+            ],
+            "release_id": "613cad6f-b73b-4c13-897a-5ee6b8517013",
+            "score": 0.01639344262295082
+          },
+          {
+            "id": "6cf6d5de-1cee-476b-8cc0-697966804f25",
+            "kind": "object",
+            "payload": {
+              "kind": "object",
+              "name": "张三",
+              "value": null,
+              "issues": [],
+              "object": null,
+              "subject": null,
+              "type_id": "employee",
+              "evidence": [
+                {
+                  "quote": "员工张三的工号为 E001。",
+                  "block_id": "f690c6c3-ed9f-4d16-9ba7-17a785124665"
+                }
+              ],
+              "identity": {
+                "staff_id": "E001"
+              },
+              "local_id": "e1",
+              "valid_to": null,
+              "object_id": "8b9c55a9cc140d36386e2725c5b57b265d89b0f5b819fd34afe0084e9c34fe76",
+              "predicate": null,
+              "conditions": {},
+              "provenance": "source_statement",
+              "valid_from": null,
+              "participants": [],
+              "domain_version_id": "e395fb8f-fc3f-4684-8c6d-550fa1a56a37"
+            },
+            "evidence_ids": [
+              "b315c139-7dcf-424d-b58b-de320d47e270"
+            ],
+            "release_id": "613cad6f-b73b-4c13-897a-5ee6b8517013",
+            "score": 0.016129032258064516
+          }
+        ]
+      },
+      {
+        "plan": {
+          "action": "read_evidence",
+          "args": {
+            "evidence_id": "44ea9695-1f8a-42e3-801f-9ec4fb90df90"
+          }
+        },
+        "executed": true,
+        "usage": {
+          "prompt_tokens": 955,
+          "completion_tokens": 38,
+          "total_tokens": 993,
+          "prompt_tokens_details": {
+            "cached_tokens": 128
+          },
+          "prompt_cache_hit_tokens": 128,
+          "prompt_cache_miss_tokens": 827
+        },
+        "result": {
+          "id": "44ea9695-1f8a-42e3-801f-9ec4fb90df90",
+          "release_id": "613cad6f-b73b-4c13-897a-5ee6b8517013",
+          "quote": "适用地区为上海时，该员工月度补贴为 100.50 CNY。",
+          "text": "企业制度测试样本（合成资料，非真实公司制度）。员工张三的工号为 E001。适用地区为上海时，该员工月度补贴为 100.50 CNY。",
+          "locator": {
+            "paragraph": 1
+          },
+          "fingerprint": "88467c137543c583f6876af842e433a678c8cc6bb6d072604401b2859c86023f",
+          "source_version_id": "d4dc8c06-0a27-4f2d-8fc1-2407e9c38a02",
+          "parse_version_id": "66e504d6-7621-4249-a255-d2e277e5ae1b",
+          "start_offset": 37,
+          "end_offset": 66
+        }
+      },
+      {
+        "plan": {
+          "action": "finish",
+          "answer": "工号 E001 对应员工张三；在适用地区为上海这一条件下，该员工月度补贴为 100.50 CNY。",
+          "citations": [
+            "44ea9695-1f8a-42e3-801f-9ec4fb90df90",
+            "b315c139-7dcf-424d-b58b-de320d47e270"
+          ],
+          "status": "supported"
+        },
+        "executed": false,
+        "usage": {
+          "prompt_tokens": 1252,
+          "completion_tokens": 92,
+          "total_tokens": 1344,
+          "prompt_tokens_details": {
+            "cached_tokens": 896
+          },
+          "prompt_cache_hit_tokens": 896,
+          "prompt_cache_miss_tokens": 356
+        }
+      },
+      {
+        "plan": {
+          "action": "read_evidence",
+          "args": {
+            "evidence_id": "b315c139-7dcf-424d-b58b-de320d47e270"
+          }
+        },
+        "executed": true,
+        "usage": {
+          "prompt_tokens": 1409,
+          "completion_tokens": 34,
+          "total_tokens": 1443,
+          "prompt_tokens_details": {
+            "cached_tokens": 1152
+          },
+          "prompt_cache_hit_tokens": 1152,
+          "prompt_cache_miss_tokens": 257
+        },
+        "result": {
+          "id": "b315c139-7dcf-424d-b58b-de320d47e270",
+          "release_id": "613cad6f-b73b-4c13-897a-5ee6b8517013",
+          "quote": "员工张三的工号为 E001。",
+          "text": "企业制度测试样本（合成资料，非真实公司制度）。员工张三的工号为 E001。适用地区为上海时，该员工月度补贴为 100.50 CNY。",
+          "locator": {
+            "paragraph": 1
+          },
+          "fingerprint": "88467c137543c583f6876af842e433a678c8cc6bb6d072604401b2859c86023f",
+          "source_version_id": "d4dc8c06-0a27-4f2d-8fc1-2407e9c38a02",
+          "parse_version_id": "66e504d6-7621-4249-a255-d2e277e5ae1b",
+          "start_offset": 23,
+          "end_offset": 37
+        }
+      },
+      {
+        "plan": {
+          "action": "finish",
+          "answer": "工号 E001 对应员工张三；在适用地区为上海这一条件下，该员工月度补贴为 100.50 CNY。",
+          "citations": [
+            "44ea9695-1f8a-42e3-801f-9ec4fb90df90",
+            "b315c139-7dcf-424d-b58b-de320d47e270"
+          ],
+          "status": "supported"
+        },
+        "executed": false,
+        "usage": {
+          "prompt_tokens": 1689,
+          "completion_tokens": 92,
+          "total_tokens": 1781,
+          "prompt_tokens_details": {
+            "cached_tokens": 1152
+          },
+          "prompt_cache_hit_tokens": 1152,
+          "prompt_cache_miss_tokens": 537
+        }
+      }
+    ],
+    "total_tokens": 5842
+  }
+}

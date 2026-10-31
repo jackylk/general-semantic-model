@@ -72,3 +72,19 @@ class QueryService:
         with self.store.transaction(principal,kb_id) as conn:
             _,manifest=self.release(conn,kb_id,release_id)
             return manifest.get('wiki',{'text':'','citations':[]})
+
+
+    def baseline_search(self,principal,kb_id,release_id,query,use_vector=True,limit=10):
+        if not query.strip() or len(query)>4000 or not 1<=limit<=50:raise ProductError('INVALID_QUERY','检索参数不合法')
+        with self.store.transaction(principal,kb_id) as conn:
+            build_id,_=self.release(conn,kb_id,release_id);terms=tokenize(query)
+            rows=conn.execute("SELECT block_id,text FROM source_search_documents WHERE kb_id=%s AND build_id=%s AND (tokens @@ plainto_tsquery('simple',%s) OR strpos(text,%s)>0) ORDER BY ts_rank(tokens,plainto_tsquery('simple',%s)) DESC,block_id LIMIT 50",(kb_id,build_id,terms,query,terms)).fetchall()
+            rankings=[[str(r[0]) for r in rows]];texts={str(r[0]):r[1] for r in rows}
+            if use_vector:
+                vector=self.embedding.embed([query])[0];v='['+','.join(map(str,vector))+']'
+                rows=conn.execute('SELECT block_id,text FROM source_search_documents WHERE kb_id=%s AND build_id=%s AND embedding IS NOT NULL ORDER BY embedding <=> %s::vector LIMIT 50',(kb_id,build_id,v)).fetchall()
+                rankings.append([str(r[0]) for r in rows]);texts.update({str(r[0]):r[1] for r in rows})
+            scores={}
+            for ranking in rankings:
+                for i,bid in enumerate(ranking):scores[bid]=scores.get(bid,0)+1/(61+i)
+            return [{'evidence_id':'block:'+bid,'text':texts[bid],'score':score,'release_id':release_id} for bid,score in sorted(scores.items(),key=lambda x:-x[1])][:limit]

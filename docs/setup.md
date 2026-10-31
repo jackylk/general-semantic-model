@@ -24,3 +24,25 @@ Embedding 为 http://127.0.0.1:8010/v1，模型 qwen3-embedding-0.6b-mlx，1024 
 当前本地源码位于 ../MinerU；其许可为 Apache 2.0 加附加商业阈值及在线服务署名条款，参见该版本 LICENSE.md。本项目通过进程边界调用，不复制其实现；后续分发必须重新核对实际版本及模型权重许可。
 
 仅纯文本/Markdown采用明确标记的 plain-text-v1，不把它当 MinerU PDF/OCR 验证。
+
+## 角色工作区
+
+配置 GSM_CREDENTIAL_SIGNING_KEY 为独立随机值，保留在 .env；角色与知识库作用域经签名验证，修改角色字段会被拒绝。更换签名密钥会使已有角色配置失效，需由产品管理员重新签发。
+
+```bash
+uv run --frozen python -m gsm.cli migrate
+uv run --frozen python -m gsm.cli init-workspaces --root runtime/workspaces --source-root ../automotive_data
+uv run --frozen python -m gsm.cli worker --credentials runtime/workspaces/developer/credentials.json
+```
+
+init-workspaces 拒绝覆盖非空目录。第二、第三窗口分别打开 runtime/workspaces/developer 和 consumer。这是实验数据，未提交 Git。第二窗口说“我要开始创建知识库”；第三窗口等待开发者提供发布版。工作区含项目级 MCP 配置，不修改用户全局 Codex 配置。客户端可能要求用户信任新工作区；这是客户端设置，不代表产品批准写入。
+
+复现本地 MinerU flash 运行环境（源码只读，不在源码目录安装或修改）：
+
+```bash
+uv run --frozen python scripts/setup_mineru.py --source ../MinerU
+```
+
+当前安装为 macOS、固定 MinerU commit、原生数字正文路径；requirements-mineru-flash.lock 固定依赖。可用 --wheelhouse runtime/wheels 从本地 wheel 安装。扫描件 OCR 尚未覆盖。
+
+实时合成资料链路烟测：`uv run --frozen python scripts/smoke_mcp.py`，需要本地 Embedding 和 DeepSeek 服务可用，会产生真实模型调用与实验知识库。它不替代独立窗口和真实领域验收。

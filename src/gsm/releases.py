@@ -53,6 +53,12 @@ class ReleaseService:
     def read_evidence(self,principal,kb_id,release_id,evidence_id):
         with self.store.transaction(principal,kb_id) as conn:
             release=conn.execute('SELECT manifest FROM releases WHERE kb_id=%s AND id=%s',(kb_id,release_id)).fetchone()
+            if release and evidence_id.startswith('block:'):
+                block_id=evidence_id[6:]
+                if block_id not in release[0].get('baseline_block_ids',[]):raise ProductError('NOT_FOUND','原文块不属于该发布版')
+                row=conn.execute('SELECT b.text,b.locator,b.fingerprint,p.source_version_id,p.id FROM source_blocks b JOIN parse_versions p ON p.kb_id=b.kb_id AND p.id=b.parse_version_id WHERE b.kb_id=%s AND b.id=%s',(kb_id,block_id)).fetchone()
+                if not row:raise ProductError('NOT_FOUND','原文块不存在或无权限')
+                return {'id':evidence_id,'release_id':release_id,'text':row[0],'quote':row[0],'locator':row[1],'fingerprint':row[2],'source_version_id':str(row[3]),'parse_version_id':str(row[4])}
             if not release or evidence_id not in release[0]['evidence_ids']:
                 raise ProductError('NOT_FOUND','证据不属于指定发布版本或无权限')
             row=conn.execute('''SELECT e.quote,b.text,b.locator,b.fingerprint,p.source_version_id,p.id,e.start_offset,e.end_offset

@@ -1,0 +1,842 @@
+[
+  {
+    "name": "describe_kb",
+    "description": "查看授权知识库范围、当前发布版及能力限制。",
+    "inputSchema": {
+      "properties": {
+        "kb_id": {
+          "title": "Kb Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kb_id"
+      ],
+      "title": "describe_kbArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "get_release",
+    "description": "",
+    "inputSchema": {
+      "properties": {
+        "kb_id": {
+          "title": "Kb Id",
+          "type": "string"
+        },
+        "release_id": {
+          "title": "Release Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kb_id",
+        "release_id"
+      ],
+      "title": "get_releaseArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "get_definitions",
+    "description": "",
+    "inputSchema": {
+      "properties": {
+        "kb_id": {
+          "title": "Kb Id",
+          "type": "string"
+        },
+        "release_id": {
+          "title": "Release Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kb_id",
+        "release_id"
+      ],
+      "title": "get_definitionsArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "query_records",
+    "description": "",
+    "inputSchema": {
+      "properties": {
+        "kb_id": {
+          "title": "Kb Id",
+          "type": "string"
+        },
+        "release_id": {
+          "title": "Release Id",
+          "type": "string"
+        },
+        "kind": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Kind"
+        },
+        "subject": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Subject"
+        },
+        "predicate": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Predicate"
+        },
+        "conditions": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Conditions"
+        },
+        "limit": {
+          "default": 100,
+          "title": "Limit",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kb_id",
+        "release_id"
+      ],
+      "title": "query_recordsArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "query_paths",
+    "description": "",
+    "inputSchema": {
+      "properties": {
+        "kb_id": {
+          "title": "Kb Id",
+          "type": "string"
+        },
+        "release_id": {
+          "title": "Release Id",
+          "type": "string"
+        },
+        "start": {
+          "title": "Start",
+          "type": "string"
+        },
+        "target": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Target"
+        },
+        "max_depth": {
+          "default": 3,
+          "title": "Max Depth",
+          "type": "integer"
+        },
+        "limit": {
+          "default": 20,
+          "title": "Limit",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kb_id",
+        "release_id",
+        "start"
+      ],
+      "title": "query_pathsArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "search",
+    "description": "",
+    "inputSchema": {
+      "properties": {
+        "kb_id": {
+          "title": "Kb Id",
+          "type": "string"
+        },
+        "release_id": {
+          "title": "Release Id",
+          "type": "string"
+        },
+        "query": {
+          "title": "Query",
+          "type": "string"
+        },
+        "limit": {
+          "default": 10,
+          "title": "Limit",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kb_id",
+        "release_id",
+        "query"
+      ],
+      "title": "searchArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "read_evidence",
+    "description": "",
+    "inputSchema": {
+      "properties": {
+        "kb_id": {
+          "title": "Kb Id",
+          "type": "string"
+        },
+        "release_id": {
+          "title": "Release Id",
+          "type": "string"
+        },
+        "evidence_id": {
+          "title": "Evidence Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kb_id",
+        "release_id",
+        "evidence_id"
+      ],
+      "title": "read_evidenceArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "get_wiki",
+    "description": "",
+    "inputSchema": {
+      "properties": {
+        "kb_id": {
+          "title": "Kb Id",
+          "type": "string"
+        },
+        "release_id": {
+          "title": "Release Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kb_id",
+        "release_id"
+      ],
+      "title": "get_wikiArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "retrieve",
+    "description": "",
+    "inputSchema": {
+      "properties": {
+        "kb_id": {
+          "title": "Kb Id",
+          "type": "string"
+        },
+        "release_id": {
+          "title": "Release Id",
+          "type": "string"
+        },
+        "question": {
+          "title": "Question",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kb_id",
+        "release_id",
+        "question"
+      ],
+      "title": "retrieveArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "submit_feedback",
+    "description": "",
+    "inputSchema": {
+      "properties": {
+        "kb_id": {
+          "title": "Kb Id",
+          "type": "string"
+        },
+        "release_id": {
+          "title": "Release Id",
+          "type": "string"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kb_id",
+        "release_id",
+        "message"
+      ],
+      "title": "submit_feedbackArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "discover_spec",
+    "description": "创建知识库的首个入口：发现指南、定义 Schema 和完整示例。",
+    "inputSchema": {
+      "properties": {},
+      "title": "discover_specArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "create_kb",
+    "description": "",
+    "inputSchema": {
+      "properties": {
+        "kb_id": {
+          "title": "Kb Id",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kb_id",
+        "name"
+      ],
+      "title": "create_kbArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "register_source",
+    "description": "",
+    "inputSchema": {
+      "properties": {
+        "kb_id": {
+          "title": "Kb Id",
+          "type": "string"
+        },
+        "relative_path": {
+          "title": "Relative Path",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kb_id",
+        "relative_path"
+      ],
+      "title": "register_sourceArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "validate_domain",
+    "description": "",
+    "inputSchema": {
+      "properties": {
+        "definition": {
+          "additionalProperties": true,
+          "title": "Definition",
+          "type": "object"
+        }
+      },
+      "required": [
+        "definition"
+      ],
+      "title": "validate_domainArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "submit_domain",
+    "description": "",
+    "inputSchema": {
+      "properties": {
+        "kb_id": {
+          "title": "Kb Id",
+          "type": "string"
+        },
+        "definition": {
+          "additionalProperties": true,
+          "title": "Definition",
+          "type": "object"
+        }
+      },
+      "required": [
+        "kb_id",
+        "definition"
+      ],
+      "title": "submit_domainArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "analyze_samples",
+    "description": "",
+    "inputSchema": {
+      "properties": {
+        "kb_id": {
+          "title": "Kb Id",
+          "type": "string"
+        },
+        "source_version_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Source Version Ids",
+          "type": "array"
+        },
+        "purpose": {
+          "title": "Purpose",
+          "type": "string"
+        },
+        "questions": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Questions",
+          "type": "array"
+        },
+        "idempotency_key": {
+          "title": "Idempotency Key",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kb_id",
+        "source_version_ids",
+        "purpose",
+        "questions",
+        "idempotency_key"
+      ],
+      "title": "analyze_samplesArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "preview_extraction",
+    "description": "",
+    "inputSchema": {
+      "properties": {
+        "kb_id": {
+          "title": "Kb Id",
+          "type": "string"
+        },
+        "domain_version_id": {
+          "title": "Domain Version Id",
+          "type": "string"
+        },
+        "source_version_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Source Version Ids",
+          "type": "array"
+        },
+        "idempotency_key": {
+          "title": "Idempotency Key",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kb_id",
+        "domain_version_id",
+        "source_version_ids",
+        "idempotency_key"
+      ],
+      "title": "preview_extractionArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "get_task",
+    "description": "",
+    "inputSchema": {
+      "properties": {
+        "kb_id": {
+          "title": "Kb Id",
+          "type": "string"
+        },
+        "task_id": {
+          "title": "Task Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kb_id",
+        "task_id"
+      ],
+      "title": "get_taskArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "retry_task",
+    "description": "",
+    "inputSchema": {
+      "properties": {
+        "kb_id": {
+          "title": "Kb Id",
+          "type": "string"
+        },
+        "task_id": {
+          "title": "Task Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kb_id",
+        "task_id"
+      ],
+      "title": "retry_taskArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "list_candidates",
+    "description": "",
+    "inputSchema": {
+      "properties": {
+        "kb_id": {
+          "title": "Kb Id",
+          "type": "string"
+        },
+        "domain_version_id": {
+          "title": "Domain Version Id",
+          "type": "string"
+        },
+        "limit": {
+          "default": 100,
+          "title": "Limit",
+          "type": "integer"
+        },
+        "offset": {
+          "default": 0,
+          "title": "Offset",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kb_id",
+        "domain_version_id"
+      ],
+      "title": "list_candidatesArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "review_candidates",
+    "description": "",
+    "inputSchema": {
+      "properties": {
+        "kb_id": {
+          "title": "Kb Id",
+          "type": "string"
+        },
+        "candidate_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Candidate Ids",
+          "type": "array"
+        },
+        "decision": {
+          "title": "Decision",
+          "type": "string"
+        },
+        "reason": {
+          "title": "Reason",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kb_id",
+        "candidate_ids",
+        "decision",
+        "reason"
+      ],
+      "title": "review_candidatesArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "start_build",
+    "description": "",
+    "inputSchema": {
+      "properties": {
+        "kb_id": {
+          "title": "Kb Id",
+          "type": "string"
+        },
+        "domain_version_id": {
+          "title": "Domain Version Id",
+          "type": "string"
+        },
+        "candidate_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Candidate Ids",
+          "type": "array"
+        },
+        "idempotency_key": {
+          "title": "Idempotency Key",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kb_id",
+        "domain_version_id",
+        "candidate_ids",
+        "idempotency_key"
+      ],
+      "title": "start_buildArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "publish",
+    "description": "",
+    "inputSchema": {
+      "properties": {
+        "kb_id": {
+          "title": "Kb Id",
+          "type": "string"
+        },
+        "build_id": {
+          "title": "Build Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kb_id",
+        "build_id"
+      ],
+      "title": "publishArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "rollback",
+    "description": "",
+    "inputSchema": {
+      "properties": {
+        "kb_id": {
+          "title": "Kb Id",
+          "type": "string"
+        },
+        "release_id": {
+          "title": "Release Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kb_id",
+        "release_id"
+      ],
+      "title": "rollbackArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "evaluate",
+    "description": "",
+    "inputSchema": {
+      "properties": {
+        "kb_id": {
+          "title": "Kb Id",
+          "type": "string"
+        },
+        "release_id": {
+          "title": "Release Id",
+          "type": "string"
+        },
+        "dataset": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Dataset",
+          "type": "array"
+        },
+        "mode": {
+          "title": "Mode",
+          "type": "string"
+        },
+        "idempotency_key": {
+          "title": "Idempotency Key",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kb_id",
+        "release_id",
+        "dataset",
+        "mode",
+        "idempotency_key"
+      ],
+      "title": "evaluateArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "get_onboarding",
+    "description": "",
+    "inputSchema": {
+      "properties": {
+        "kb_id": {
+          "title": "Kb Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kb_id"
+      ],
+      "title": "get_onboardingArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "save_onboarding",
+    "description": "",
+    "inputSchema": {
+      "properties": {
+        "kb_id": {
+          "title": "Kb Id",
+          "type": "string"
+        },
+        "patch": {
+          "additionalProperties": true,
+          "title": "Patch",
+          "type": "object"
+        },
+        "expected_revision": {
+          "title": "Expected Revision",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kb_id",
+        "patch",
+        "expected_revision"
+      ],
+      "title": "save_onboardingArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "read_candidate_evidence",
+    "description": "",
+    "inputSchema": {
+      "properties": {
+        "kb_id": {
+          "title": "Kb Id",
+          "type": "string"
+        },
+        "candidate_id": {
+          "title": "Candidate Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kb_id",
+        "candidate_id"
+      ],
+      "title": "read_candidate_evidenceArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "list_conflicts",
+    "description": "",
+    "inputSchema": {
+      "properties": {
+        "kb_id": {
+          "title": "Kb Id",
+          "type": "string"
+        },
+        "domain_version_id": {
+          "title": "Domain Version Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kb_id",
+        "domain_version_id"
+      ],
+      "title": "list_conflictsArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "diff_releases",
+    "description": "",
+    "inputSchema": {
+      "properties": {
+        "kb_id": {
+          "title": "Kb Id",
+          "type": "string"
+        },
+        "old_release_id": {
+          "title": "Old Release Id",
+          "type": "string"
+        },
+        "new_release_id": {
+          "title": "New Release Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kb_id",
+        "old_release_id",
+        "new_release_id"
+      ],
+      "title": "diff_releasesArguments",
+      "type": "object"
+    }
+  }
+]
