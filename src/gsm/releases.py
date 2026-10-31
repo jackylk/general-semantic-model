@@ -19,7 +19,8 @@ class ReleaseService:
             if not build or not build[1] or not build[0]:
                 raise ProductError('BUILD_NOT_READY','构建未就绪或不包含记录')
             record_ids=[str(r) for r in build[0]]
-            rows=conn.execute('SELECT id,status FROM records WHERE kb_id=%s AND id=ANY(%s::uuid[])',(kb_id,record_ids)).fetchall()
+            rows=conn.execute('''SELECT r.id,CASE WHEN d.decision='confirm' THEN 'confirmed' WHEN d.decision='reject' THEN 'rejected' ELSE r.status END
+                FROM records r LEFT JOIN LATERAL (SELECT decision FROM review_decisions d WHERE d.kb_id=r.kb_id AND d.record_id=r.id ORDER BY created_at DESC,id DESC LIMIT 1) d ON true WHERE r.kb_id=%s AND r.id=ANY(%s::uuid[])''',(kb_id,record_ids)).fetchall()
             if len(rows)!=len(set(record_ids)) or any(status not in ('verified','confirmed') for _,status in rows):
                 raise ProductError('REVIEW_REQUIRED','包含未核验、冲突或其他知识库的记录')
             evidence=conn.execute('''SELECT e.id,e.record_id,b.id,p.id,p.source_version_id

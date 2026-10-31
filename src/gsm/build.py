@@ -1,0 +1,213 @@
+from typing import Any
+from hashlib import sha256
+from pathlib import Path
+from decimal import Decimal,InvalidOperation
+from datetime import date
+import json
+from pydantic import Field,ValidationError
+from psycopg.types.json import Jsonb
+from .domain import StrictModel,validate_domain
+from .errors import ProductError
+
+class EvidenceInput(StrictModel):
+    block_id: str
+    quote: str = Field(min_length=1)
+
+class Candidate(StrictModel):
+    kind: str
+    local_id: str | None = None
+    type_id: str | None = None
+    name: str = ''
+    identity: dict = Field(default_factory=dict)
+    subject: str | None = None
+    predicate: str | None = None
+    object: str | None = None
+    value: Any = None
+    conditions: dict = Field(default_factory=dict)
+    evidence: list[EvidenceInput] = Field(default_factory=list)
+    participants: list[dict[str,str]] = Field(default_factory=list)
+    provenance: str = 'source_statement'
+    valid_from: str | None = None
+    valid_to: str | None = None
+
+
+def value_issues(value,definition):
+    typ=definition.value_type
+    if typ=='quantity':
+        if not isinstance(value,dict) or set(value)!={'value','unit'}: return ['INVALID_VALUE']
+        errors=value_issues(value['value'],type('D',(),{'value_type':'decimal'})())
+        if definition.units and value['unit'] not in definition.units: errors.append('UNIT_NOT_ALLOWED')
+        return errors
+    if typ=='decimal':
+        try:
+            if isinstance(value,(bool,float)) or not Decimal(str(value)).is_finite(): return ['INVALID_VALUE']
+        except (ValueError,TypeError,InvalidOperation): return ['INVALID_VALUE']
+    elif typ=='string' and (not isinstance(value,str) or not value.strip()): return ['INVALID_VALUE']
+    elif typ=='boolean' and not isinstance(value,bool): return ['INVALID_VALUE']
+    elif typ=='enum' and value not in definition.enum_values: return ['INVALID_VALUE']
+    elif typ=='date':
+        try: date.fromisoformat(value)
+        except (ValueError,TypeError): return ['INVALID_VALUE']
+    elif typ=='interval':
+        if not isinstance(value,dict) or set(value)!={'start','end'}: return ['INVALID_VALUE']
+        try:
+            if date.fromisoformat(value['start'])>date.fromisoformat(value['end']): return ['INVALID_VALUE']
+        except (ValueError,TypeError): return ['INVALID_VALUE']
+    elif typ=='list':
+        if not isinstance(value,list): return ['INVALID_VALUE']
+        item=definition.model_copy(update={'value_type':definition.item_type,'item_type':None})
+        return [err for v in value for err in value_issues(v,item)]
+    elif typ=='object_ref' and not isinstance(value,str): return ['INVALID_VALUE']
+    return []
+
+class BuildService:
+    def __init__(self,store): self.store=store
+
+    def migrate(self):
+        with self.store.connect('owner') as conn:
+            conn.execute('SELECT pg_advisory_xact_lock(79523489)')
+            if not conn.execute("SELECT 1 FROM schema_migrations WHERE version='003'").fetchone():
+                conn.execute(Path('migrations/003_build.sql').read_text())
+                conn.execute("INSERT INTO schema_migrations(version) VALUES('003')")
+
+    def submit_domain(self,principal,kb_id,data):
+        principal.require(kb_id,write=True)
+        domain=validate_domain(data)
+        with self.store.transaction(principal,kb_id) as conn:
+            return str(conn.execute('INSERT INTO domain_versions(kb_id,payload) VALUES(%s,%s) RETURNING id',(kb_id,Jsonb(domain.model_dump(mode='json')))).fetchone()[0])
+
+    def get_domain(self,principal,kb_id,domain_version_id):
+        with self.store.transaction(principal,kb_id) as conn:
+            row=conn.execute('SELECT payload FROM domain_versions WHERE kb_id=%s AND id=%s',(kb_id,domain_version_id)).fetchone()
+            if not row: raise ProductError('NOT_FOUND','领域版本不存在或无权限')
+            return validate_domain(row[0])
+
+    def ingest(self,principal,kb_id,domain_version_id,raw_candidates):
+        principal.require(kb_id,write=True)
+        domain=self.get_domain(principal,kb_id,domain_version_id)
+        try: candidates=[Candidate.model_validate(c) for c in raw_candidates]
+        except ValidationError:
+            raise ProductError('INVALID_EXTRACTION','抽取候选不符合产品 Schema') from None
+        types={t.id:t for t in domain.types};props={p.id:p for p in domain.properties};rels={r.id:r for r in domain.relations};conds={c.id:c for c in domain.conditions}
+        objects={};object_types={};unresolved=set();results=[]
+        with self.store.transaction(principal,kb_id) as conn:
+            existing=conn.execute("SELECT payload FROM records WHERE kb_id=%s AND kind='object' AND status IN ('verified','confirmed')",(kb_id,)).fetchall()
+            for row in existing:
+                payload=row[0]
+                if payload.get('object_id'): object_types[payload['object_id']]=payload.get('type_id')
+            for c in candidates:
+                if c.kind!='object': continue
+                if not c.local_id or c.local_id in objects: raise ProductError('INVALID_EXTRACTION','对象 local_id 缺失或重复')
+                definition=types.get(c.type_id)
+                valid=definition and definition.identity and all(k in c.identity and not value_issues(c.identity[k],props[k]) for k in definition.identity)
+                key=sha256(json.dumps([c.type_id,c.identity],sort_keys=True,ensure_ascii=False).encode()).hexdigest() if valid else 'unresolved:'+c.local_id
+                objects[c.local_id]=key;object_types[key]=c.type_id
+                if not valid: unresolved.add(key)
+            for c in candidates:
+                issues=[]
+                def add(code,fatal=True): issues.append({'code':code,'fatal':fatal})
+                payload=c.model_dump(mode='json');payload['domain_version_id']=domain_version_id
+                if c.provenance not in ('source_statement','observation','calculation','inference'): add('INVALID_PROVENANCE')
+                if c.provenance in ('calculation','inference'): add('REVIEW_REQUIRED',False)
+                if c.kind=='object':
+                    payload['object_id']=objects[c.local_id]
+                    if payload['object_id'] in unresolved: add('IDENTITY_UNRESOLVED')
+                    if c.type_id not in types: add('UNKNOWN_TYPE')
+                elif c.kind in ('assertion','relation'):
+                    subject=objects.get(c.subject,c.subject);payload['subject']=subject
+                    if subject not in object_types or subject in unresolved: add('SUBJECT_UNRESOLVED')
+                    definition=props.get(c.predicate) if c.kind=='assertion' else rels.get(c.predicate)
+                    if definition is None: add('UNKNOWN_PREDICATE')
+                    else:
+                        if object_types.get(subject) not in definition.subject_types: add('SUBJECT_TYPE_MISMATCH')
+                        if definition.require_review: add('REVIEW_REQUIRED',False)
+                        for key in definition.required_conditions:
+                            if key not in c.conditions: add('MISSING_CONDITION')
+                        if c.kind=='assertion':
+                            if definition.value_type=='object_ref':
+                                target=objects.get(c.value,c.value) if isinstance(c.value,str) else None
+                                payload['value']=target
+                                if target in unresolved or object_types.get(target) not in definition.reference_types:add('VALUE_REFERENCE_UNRESOLVED')
+                            for code in value_issues(c.value,definition): add(code)
+                        else:
+                            target=objects.get(c.object,c.object);payload['object']=target
+                            if target not in object_types or target in unresolved: add('OBJECT_UNRESOLVED')
+                            elif object_types[target] not in definition.object_types: add('OBJECT_TYPE_MISMATCH')
+                elif c.kind=='event':
+                    definition=next((e for e in domain.events if e.id==c.type_id),None)
+                    if definition is None: add('UNKNOWN_EVENT')
+                    else:
+                        roles={r.id:r for r in definition.roles};present=set();participants=[]
+                        for participant in c.participants:
+                            role=participant.get('role');target=objects.get(participant.get('object'),participant.get('object'))
+                            present.add(role)
+                            if role not in roles: add('UNKNOWN_EVENT_ROLE')
+                            elif target in unresolved or object_types.get(target) not in roles[role].object_types: add('PARTICIPANT_TYPE_MISMATCH')
+                            participants.append({'role':role,'object':target})
+                        if any(r.required and r.id not in present for r in definition.roles):add('MISSING_PARTICIPANT')
+                        payload['participants']=participants
+                elif c.kind=='rule':
+                    subject=objects.get(c.subject,c.subject);payload['subject']=subject
+                    definition=next((r for r in domain.rules if r.id==c.predicate),None)
+                    if definition is None:add('UNKNOWN_RULE')
+                    else:
+                        if subject in unresolved or object_types.get(subject) not in definition.applies_to:add('SUBJECT_TYPE_MISMATCH')
+                        payload['rule']=definition.model_dump(mode='json')
+                        if definition.require_review:add('REVIEW_REQUIRED',False)
+                else: add('UNSUPPORTED_RECORD_KIND')
+                for key,value in c.conditions.items():
+                    if key not in conds: add('UNKNOWN_CONDITION')
+                    else:
+                        for code in value_issues(value,conds[key]): add(code)
+                if c.kind=='assertion' and not any(i['fatal'] for i in issues):
+                    previous=conn.execute("SELECT id,payload FROM records WHERE kb_id=%s AND kind='assertion' AND payload->>'subject'=%s AND payload->>'predicate'=%s",(kb_id,payload.get('subject'),c.predicate)).fetchall()
+                    conflicting=[str(rid) for rid,old in previous if old.get('conditions',{})==c.conditions and old.get('valid_from')==c.valid_from and old.get('valid_to')==c.valid_to and old.get('value')!=c.value]
+                    if conflicting:
+                        add('CONFLICT',False)
+                        payload['conflicting_record_ids']=conflicting
+                links=[]
+                for e in c.evidence:
+                    row=conn.execute('SELECT text FROM source_blocks WHERE kb_id=%s AND id=%s',(kb_id,e.block_id)).fetchone()
+                    if not row or e.quote not in row[0]: add('EVIDENCE_NOT_LOCATED')
+                    else: links.append((e,row[0].index(e.quote)))
+                if not links: add('EVIDENCE_REQUIRED')
+                payload['issues']=issues;status='candidate' if issues else 'verified'
+                record_id=str(conn.execute('INSERT INTO records(kb_id,kind,payload,status) VALUES(%s,%s,%s,%s) RETURNING id',(kb_id,c.kind if c.kind in ('object','assertion','relation','event','rule') else 'assertion',Jsonb(payload),status)).fetchone()[0])
+                for e,start in links:
+                    conn.execute('INSERT INTO evidence_links(kb_id,record_id,block_id,quote,start_offset,end_offset) VALUES(%s,%s,%s,%s,%s,%s)',(kb_id,record_id,e.block_id,e.quote,start,start+len(e.quote)))
+                results.append({'id':record_id,'status':status,'issues':issues,'payload':payload})
+        return {'objects':objects,'candidates':results}
+
+    def finish(self,principal,kb_id,domain_version_id,record_ids,embed=True):
+        from .search import tokenize
+        from .adapters.embedding import Embedding
+        from .releases import ReleaseService
+        principal.require(kb_id,write=True)
+        self.get_domain(principal,kb_id,domain_version_id)
+        with self.store.connect('owner') as conn:
+            conn.execute('SELECT pg_advisory_xact_lock(79523489)')
+            if not conn.execute("SELECT 1 FROM schema_migrations WHERE version='004'").fetchone():
+                conn.execute(Path('migrations/004_artifacts.sql').read_text())
+                conn.execute("INSERT INTO schema_migrations(version) VALUES('004')")
+        with self.store.transaction(principal,kb_id) as conn:
+            rows=conn.execute('SELECT id,kind,payload FROM records WHERE kb_id=%s AND id=ANY(%s::uuid[])',(kb_id,record_ids)).fetchall()
+            if len(rows)!=len(set(record_ids)) or any(r[2].get('domain_version_id')!=domain_version_id for r in rows):
+                raise ProductError('INVALID_BUILD','记录缺失或领域版本不匹配')
+            texts=[];citations=[]
+            for rid,kind,payload in rows:
+                predicate=payload.get('predicate')
+                domain=self.get_domain(principal,kb_id,domain_version_id)
+                names={d.id:d.name for group in (domain.properties,domain.relations) for d in group}
+                texts.append(names.get(predicate,'')+' '+json.dumps(payload,ensure_ascii=False,sort_keys=True))
+                for e in conn.execute('SELECT id FROM evidence_links WHERE kb_id=%s AND record_id=%s',(kb_id,rid)).fetchall():
+                    citations.append({'record_id':str(rid),'evidence_id':str(e[0])})
+        vectors=Embedding().embed(texts) if embed else [None]*len(texts)
+        build_id=ReleaseService(self.store).stage(principal,kb_id,record_ids,ready=False)
+        with self.store.transaction(principal,kb_id) as conn:
+            for row,text,vector in zip(rows,texts,vectors):
+                encoded='['+','.join(map(str,vector))+']' if vector is not None else None
+                conn.execute("INSERT INTO search_documents(kb_id,build_id,record_id,text,tokens,embedding) VALUES(%s,%s,%s,%s,to_tsvector('simple',%s),%s::vector)",(kb_id,build_id,row[0],text,tokenize(text),encoded))
+            from .wiki import render_wiki
+            wiki=render_wiki(rows,domain,citations)
+            conn.execute('UPDATE builds SET ready=true,manifest=%s WHERE kb_id=%s AND id=%s',(Jsonb({'domain_version_id':domain_version_id,'wiki':wiki,'vector_ready':embed}),kb_id,build_id))
+        return build_id
