@@ -25,10 +25,10 @@ class SourceService:
                 row=conn.execute('SELECT id FROM source_versions WHERE kb_id=%s AND source_key=%s AND sha256=%s',(kb_id,relative_path,digest)).fetchone()
             return {'id':str(row[0]),'sha256':digest,'byte_count':len(data)}
 
-    def save_parse(self,principal,kb_id,source_version_id,parser_version,blocks):
+    def save_parse(self,principal,kb_id,source_version_id,parser_version,blocks,raw=None):
         principal.require(kb_id,write=True)
         with self.store.transaction(principal,kb_id) as conn:
-            parse_id=conn.execute('INSERT INTO parse_versions(kb_id,source_version_id,parser_version) VALUES(%s,%s,%s) RETURNING id',(kb_id,source_version_id,parser_version)).fetchone()[0]
+            parse_id=conn.execute('INSERT INTO parse_versions(kb_id,source_version_id,parser_version,raw_output) VALUES(%s,%s,%s,%s) RETURNING id',(kb_id,source_version_id,parser_version,Jsonb(raw or {}))).fetchone()[0]
             result=[]
             for i,block in enumerate(blocks):
                 text=block['text']; locator={k:v for k,v in block.items() if k!='text'}

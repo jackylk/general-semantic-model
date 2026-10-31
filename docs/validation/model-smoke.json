@@ -1,0 +1,21 @@
+{
+  "scope": "API smoke only; not extraction accuracy",
+  "llm": {
+    "model": "deepseek-flash",
+    "usage": {
+      "prompt_tokens": 54,
+      "completion_tokens": 5,
+      "total_tokens": 59,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      },
+      "prompt_cache_hit_tokens": 0,
+      "prompt_cache_miss_tokens": 54
+    },
+    "json_ok": true
+  },
+  "embedding": {
+    "batch": 1,
+    "dimensions": 1024
+  }
+}

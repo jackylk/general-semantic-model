@@ -1,0 +1,10 @@
+{
+  "scope": "single native-text PDF smoke; no OCR or extraction quality acceptance",
+  "source_relative_path": "documents/博世/technical_report/67b8b56b23cd011c_beg_flexible_control_unit_onepager_en.pdf",
+  "sha256": "db792825e4b54322a52ff0cc68fbd09019c7d108cae1493bb6396149989213c2",
+  "mineru_commit": "0ef2c20c4a56e68f81a66647f819d924ef2d89ce",
+  "pages": 1,
+  "blocks": 18,
+  "parser": "mineru-local-flash",
+  "raw_output_retained": true
+}

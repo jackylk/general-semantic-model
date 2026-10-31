@@ -22,6 +22,7 @@ class Store:
             conn.execute('SELECT pg_advisory_xact_lock(79523489)')
             exists=conn.execute("SELECT to_regclass('public.schema_migrations')").fetchone()[0]
             if exists and conn.execute("SELECT 1 FROM schema_migrations WHERE version='001'").fetchone():
+                self._migrate_remaining(conn)
                 return
             conn.execute(Path('migrations/001_core.sql').read_text())
             for role in ('developer','consumer'):
@@ -42,6 +43,14 @@ class Store:
                 conn.execute(sql.SQL('GRANT UPDATE ON {} TO gsm_developer').format(sql.Identifier(table)))
                 conn.execute(sql.SQL('CREATE TRIGGER prevent_changes BEFORE UPDATE OR DELETE ON {} FOR EACH ROW EXECUTE FUNCTION immutable_row()').format(sql.Identifier(table)))
             conn.execute("INSERT INTO schema_migrations(version) VALUES ('001')")
+            self._migrate_remaining(conn)
+
+    def _migrate_remaining(self,conn):
+        for path in sorted(Path('migrations').glob('*.sql')):
+            version=path.name.split('_')[0]
+            if not conn.execute('SELECT 1 FROM schema_migrations WHERE version=%s',(version,)).fetchone():
+                conn.execute(path.read_text())
+                conn.execute('INSERT INTO schema_migrations(version) VALUES(%s)',(version,))
 
     @contextmanager
     def transaction(self, principal: Principal, kb_id: str):

@@ -2,7 +2,8 @@ version = 1
 revision = 3
 requires-python = ">=3.12"
 resolution-markers = [
-    "sys_platform == 'darwin'",
+    "python_full_version >= '3.14' and sys_platform == 'darwin'",
+    "python_full_version < '3.14' and sys_platform == 'darwin'",
 ]
 supported-markers = [
     "sys_platform == 'darwin'",
@@ -17,10 +18,69 @@ wheels = [
 ]
 
 [[package]]
+name = "anyio"
+version = "4.15.1"
+source = { registry = "runtime/wheels" }
+dependencies = [
+    { name = "idna" },
+    { name = "typing-extensions", marker = "python_full_version < '3.15'" },
+]
+wheels = [
+    { path = "anyio-4.15.1-py3-none-any.whl" },
+]
+
+[[package]]
+name = "attrs"
+version = "26.1.0"
+source = { registry = "runtime/wheels" }
+wheels = [
+    { path = "attrs-26.1.0-py3-none-any.whl" },
+]
+
+[[package]]
+name = "certifi"
+version = "2026.10.23"
+source = { registry = "runtime/wheels" }
+wheels = [
+    { path = "certifi-2026.10.23-py3-none-any.whl" },
+]
+
+[[package]]
+name = "cffi"
+version = "2.0.0"
+source = { registry = "runtime/wheels" }
+dependencies = [
+    { name = "pycparser", marker = "implementation_name != 'PyPy'" },
+]
+wheels = [
+    { path = "cffi-2.0.0-cp312-cp312-macosx_11_0_arm64.whl" },
+]
+
+[[package]]
+name = "click"
+version = "8.1.8"
+source = { registry = "runtime/wheels" }
+wheels = [
+    { path = "click-8.1.8-py3-none-any.whl" },
+]
+
+[[package]]
+name = "cryptography"
+version = "50.0.2"
+source = { registry = "runtime/wheels" }
+dependencies = [
+    { name = "cffi", marker = "platform_python_implementation != 'PyPy'" },
+]
+wheels = [
+    { path = "cryptography-50.0.2-cp311-abi3-macosx_11_0_arm64.whl" },
+]
+
+[[package]]
 name = "general-semantic-model"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "mcp" },
     { name = "psycopg", extra = ["binary"] },
     { name = "pydantic" },
     { name = "python-dotenv" },
@@ -34,6 +94,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "mcp", specifier = ">=1.20,<2" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2,<4" },
     { name = "pydantic", specifier = ">=2.10,<3" },
     { name = "python-dotenv", specifier = ">=1,<2" },
@@ -44,11 +105,109 @@ requires-dist = [
 dev = [{ name = "pytest", specifier = ">=8,<10" }]
 
 [[package]]
+name = "h11"
+version = "0.16.0"
+source = { registry = "runtime/wheels" }
+wheels = [
+    { path = "h11-0.16.0-py3-none-any.whl" },
+]
+
+[[package]]
+name = "httpcore"
+version = "1.0.9"
+source = { registry = "runtime/wheels" }
+dependencies = [
+    { name = "certifi" },
+    { name = "h11" },
+]
+wheels = [
+    { path = "httpcore-1.0.9-py3-none-any.whl" },
+]
+
+[[package]]
+name = "httpx"
+version = "0.28.1"
+source = { registry = "runtime/wheels" }
+dependencies = [
+    { name = "anyio" },
+    { name = "certifi" },
+    { name = "httpcore" },
+    { name = "idna" },
+]
+wheels = [
+    { path = "httpx-0.28.1-py3-none-any.whl" },
+]
+
+[[package]]
+name = "httpx-sse"
+version = "0.4.3"
+source = { registry = "runtime/wheels" }
+wheels = [
+    { path = "httpx_sse-0.4.3-py3-none-any.whl" },
+]
+
+[[package]]
+name = "idna"
+version = "3.20"
+source = { registry = "runtime/wheels" }
+wheels = [
+    { path = "idna-3.20-py3-none-any.whl" },
+]
+
+[[package]]
 name = "iniconfig"
 version = "2.1.0"
 source = { registry = "runtime/wheels" }
 wheels = [
     { path = "iniconfig-2.1.0-py3-none-any.whl" },
+]
+
+[[package]]
+name = "jsonschema"
+version = "4.26.0"
+source = { registry = "runtime/wheels" }
+dependencies = [
+    { name = "attrs" },
+    { name = "jsonschema-specifications" },
+    { name = "referencing" },
+    { name = "rpds-py" },
+]
+wheels = [
+    { path = "jsonschema-4.26.0-py3-none-any.whl" },
+]
+
+[[package]]
+name = "jsonschema-specifications"
+version = "2025.9.1"
+source = { registry = "runtime/wheels" }
+dependencies = [
+    { name = "referencing" },
+]
+wheels = [
+    { path = "jsonschema_specifications-2025.9.1-py3-none-any.whl" },
+]
+
+[[package]]
+name = "mcp"
+version = "1.30.0"
+source = { registry = "runtime/wheels" }
+dependencies = [
+    { name = "anyio" },
+    { name = "httpx" },
+    { name = "httpx-sse" },
+    { name = "jsonschema" },
+    { name = "pydantic" },
+    { name = "pydantic-settings" },
+    { name = "pyjwt", extra = ["crypto"] },
+    { name = "python-multipart" },
+    { name = "sse-starlette" },
+    { name = "starlette" },
+    { name = "typing-extensions" },
+    { name = "typing-inspection" },
+    { name = "uvicorn" },
+]
+wheels = [
+    { path = "mcp-1.30.0-py3-none-any.whl" },
 ]
 
 [[package]]
@@ -92,6 +251,14 @@ wheels = [
 ]
 
 [[package]]
+name = "pycparser"
+version = "2.23"
+source = { registry = "runtime/wheels" }
+wheels = [
+    { path = "pycparser-2.23-py3-none-any.whl" },
+]
+
+[[package]]
 name = "pydantic"
 version = "2.12.5"
 source = { registry = "runtime/wheels" }
@@ -117,11 +284,37 @@ wheels = [
 ]
 
 [[package]]
+name = "pydantic-settings"
+version = "2.15.0"
+source = { registry = "runtime/wheels" }
+dependencies = [
+    { name = "pydantic" },
+    { name = "python-dotenv" },
+    { name = "typing-inspection" },
+]
+wheels = [
+    { path = "pydantic_settings-2.15.0-py3-none-any.whl" },
+]
+
+[[package]]
 name = "pygments"
 version = "2.19.2"
 source = { registry = "runtime/wheels" }
 wheels = [
     { path = "pygments-2.19.2-py3-none-any.whl" },
+]
+
+[[package]]
+name = "pyjwt"
+version = "2.15.1"
+source = { registry = "runtime/wheels" }
+wheels = [
+    { path = "pyjwt-2.15.1-py3-none-any.whl" },
+]
+
+[package.optional-dependencies]
+crypto = [
+    { name = "cryptography" },
 ]
 
 [[package]]
@@ -147,6 +340,14 @@ wheels = [
 ]
 
 [[package]]
+name = "python-multipart"
+version = "0.0.32"
+source = { registry = "runtime/wheels" }
+wheels = [
+    { path = "python_multipart-0.0.32-py3-none-any.whl" },
+]
+
+[[package]]
 name = "pyyaml"
 version = "6.0.3"
 source = { registry = "runtime/wheels" }
@@ -155,11 +356,56 @@ wheels = [
 ]
 
 [[package]]
-name = "typing-extensions"
-version = "4.15.0"
+name = "referencing"
+version = "0.37.0"
+source = { registry = "runtime/wheels" }
+dependencies = [
+    { name = "attrs" },
+    { name = "rpds-py" },
+    { name = "typing-extensions", marker = "python_full_version < '3.13'" },
+]
+wheels = [
+    { path = "referencing-0.37.0-py3-none-any.whl" },
+]
+
+[[package]]
+name = "rpds-py"
+version = "2026.9.1"
 source = { registry = "runtime/wheels" }
 wheels = [
-    { path = "typing_extensions-4.15.0-py3-none-any.whl" },
+    { path = "rpds_py-2026.9.1-cp312-cp312-macosx_11_0_arm64.whl" },
+]
+
+[[package]]
+name = "sse-starlette"
+version = "3.6.0"
+source = { registry = "runtime/wheels" }
+dependencies = [
+    { name = "anyio" },
+    { name = "starlette" },
+]
+wheels = [
+    { path = "sse_starlette-3.6.0-py3-none-any.whl" },
+]
+
+[[package]]
+name = "starlette"
+version = "1.10.0"
+source = { registry = "runtime/wheels" }
+dependencies = [
+    { name = "anyio" },
+    { name = "typing-extensions", marker = "python_full_version < '3.13'" },
+]
+wheels = [
+    { path = "starlette-1.10.0-py3-none-any.whl" },
+]
+
+[[package]]
+name = "typing-extensions"
+version = "4.16.0"
+source = { registry = "runtime/wheels" }
+wheels = [
+    { path = "typing_extensions-4.16.0-py3-none-any.whl" },
 ]
 
 [[package]]
@@ -171,4 +417,16 @@ dependencies = [
 ]
 wheels = [
     { path = "typing_inspection-0.4.2-py3-none-any.whl" },
+]
+
+[[package]]
+name = "uvicorn"
+version = "0.54.0"
+source = { registry = "runtime/wheels" }
+dependencies = [
+    { name = "click" },
+    { name = "h11" },
+]
+wheels = [
+    { path = "uvicorn-0.54.0-py3-none-any.whl" },
 ]
