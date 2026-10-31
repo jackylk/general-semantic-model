@@ -1,0 +1,19 @@
+name: gsm-prototype
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_DB: gsm
+      POSTGRES_USER: gsm_owner
+      POSTGRES_PASSWORD: ${GSM_DB_PASSWORD:?configure local .env}
+    ports:
+      - '127.0.0.1:55438:5432'
+    volumes:
+      - gsm_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U gsm_owner -d gsm']
+      interval: 3s
+      timeout: 3s
+      retries: 20
+volumes:
+  gsm_pg_data:
