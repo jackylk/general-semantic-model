@@ -19,6 +19,7 @@ def provision(root:Path,source_root:Path):
             (path/'domain').mkdir()
         else:
             (path/'AGENTS.md').write_text((product/'docs/consumer-guide.md').read_text()+f'\n本工作区授权知识库 ID：{kb_id}。\n')
+        (path/'start-codex.py').write_text((product/'templates/developer-workspace/start-codex.py').read_text())
         (path/'WORKSPACE.json').write_text(json.dumps({'kb_id':kb_id,'role':role},indent=2)+'\n')
         result[role]=str(path)
     return {'kb_id':kb_id,'workspaces':result}

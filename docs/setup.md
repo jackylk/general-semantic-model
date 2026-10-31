@@ -46,3 +46,12 @@ uv run --frozen python scripts/setup_mineru.py --source ../MinerU
 当前安装为 macOS、固定 MinerU commit、原生数字正文路径；requirements-mineru-flash.lock 固定依赖。可用 --wheelhouse runtime/wheels 从本地 wheel 安装。扫描件 OCR 尚未覆盖。
 
 实时合成资料链路烟测：`uv run --frozen python scripts/smoke_mcp.py`，需要本地 Embedding 和 DeepSeek 服务可用，会产生真实模型调用与实验知识库。它不替代独立窗口和真实领域验收。
+
+本机检查发现尚未信任工作区时，`codex mcp list` 不会加载项目配置。可改用下列启动器，它只为新会话显式传入对应 MCP，不修改全局设置：
+
+```bash
+python3 runtime/workspaces/developer/start-codex.py
+python3 runtime/workspaces/consumer/start-codex.py
+```
+
+CLI 会话启动后，开发者输入“我要开始创建知识库”。图形界面方式仍需按客户端提示信任对应工作区，再检查 MCP 连接。已验证的是配置发现和独立 MCP 客户端；实际第二窗口引导体验待用户验收。
