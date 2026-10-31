@@ -1,0 +1,667 @@
+{
+  "$defs": {
+    "Condition": {
+      "additionalProperties": false,
+      "properties": {
+        "op": {
+          "enum": [
+            "eq",
+            "ne",
+            "lt",
+            "le",
+            "gt",
+            "ge",
+            "in",
+            "between",
+            "all",
+            "any",
+            "unknown"
+          ],
+          "title": "Op",
+          "type": "string"
+        },
+        "field": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z][a-z0-9_]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Field"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            },
+            {
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                    "type": "string"
+                  }
+                ]
+              },
+              "type": "array"
+            },
+            {
+              "$ref": "#/$defs/Quantity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value"
+        },
+        "args": {
+          "items": {
+            "$ref": "#/$defs/Condition"
+          },
+          "maxItems": 100,
+          "title": "Args",
+          "type": "array"
+        }
+      },
+      "required": [
+        "op"
+      ],
+      "title": "Condition",
+      "type": "object"
+    },
+    "ConditionDefinition": {
+      "additionalProperties": false,
+      "properties": {
+        "value_type": {
+          "enum": [
+            "string",
+            "boolean",
+            "decimal",
+            "enum",
+            "date",
+            "interval",
+            "quantity",
+            "object_ref",
+            "list"
+          ],
+          "title": "Value Type",
+          "type": "string"
+        },
+        "units": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Units",
+          "type": "array"
+        },
+        "enum_values": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Enum Values",
+          "type": "array"
+        },
+        "reference_types": {
+          "items": {
+            "pattern": "^[a-z][a-z0-9_]{0,63}$",
+            "type": "string"
+          },
+          "title": "Reference Types",
+          "type": "array"
+        },
+        "item_type": {
+          "anyOf": [
+            {
+              "enum": [
+                "string",
+                "boolean",
+                "decimal",
+                "date",
+                "quantity",
+                "object_ref"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Item Type"
+        },
+        "id": {
+          "pattern": "^[a-z][a-z0-9_]{0,63}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "default": "",
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "value_type",
+        "id"
+      ],
+      "title": "ConditionDefinition",
+      "type": "object"
+    },
+    "Event": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^[a-z][a-z0-9_]{0,63}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "description": {
+          "default": "",
+          "title": "Description",
+          "type": "string"
+        },
+        "aliases": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Aliases",
+          "type": "array"
+        },
+        "roles": {
+          "items": {
+            "$ref": "#/$defs/EventRole"
+          },
+          "minItems": 1,
+          "title": "Roles",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "roles"
+      ],
+      "title": "Event",
+      "type": "object"
+    },
+    "EventRole": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^[a-z][a-z0-9_]{0,63}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "object_types": {
+          "items": {
+            "pattern": "^[a-z][a-z0-9_]{0,63}$",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Object Types",
+          "type": "array"
+        },
+        "required": {
+          "default": false,
+          "title": "Required",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "object_types"
+      ],
+      "title": "EventRole",
+      "type": "object"
+    },
+    "ObjectType": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^[a-z][a-z0-9_]{0,63}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "description": {
+          "default": "",
+          "title": "Description",
+          "type": "string"
+        },
+        "aliases": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Aliases",
+          "type": "array"
+        },
+        "identity": {
+          "items": {
+            "pattern": "^[a-z][a-z0-9_]{0,63}$",
+            "type": "string"
+          },
+          "title": "Identity",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "name"
+      ],
+      "title": "ObjectType",
+      "type": "object"
+    },
+    "Policies": {
+      "additionalProperties": false,
+      "properties": {
+        "extraction": {
+          "default": "",
+          "title": "Extraction",
+          "type": "string"
+        },
+        "retrieval": {
+          "default": "",
+          "title": "Retrieval",
+          "type": "string"
+        },
+        "source_scope": {
+          "default": "",
+          "title": "Source Scope",
+          "type": "string"
+        },
+        "additional_review": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Additional Review",
+          "type": "array"
+        }
+      },
+      "title": "Policies",
+      "type": "object"
+    },
+    "Property": {
+      "additionalProperties": false,
+      "properties": {
+        "value_type": {
+          "enum": [
+            "string",
+            "boolean",
+            "decimal",
+            "enum",
+            "date",
+            "interval",
+            "quantity",
+            "object_ref",
+            "list"
+          ],
+          "title": "Value Type",
+          "type": "string"
+        },
+        "units": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Units",
+          "type": "array"
+        },
+        "enum_values": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Enum Values",
+          "type": "array"
+        },
+        "reference_types": {
+          "items": {
+            "pattern": "^[a-z][a-z0-9_]{0,63}$",
+            "type": "string"
+          },
+          "title": "Reference Types",
+          "type": "array"
+        },
+        "item_type": {
+          "anyOf": [
+            {
+              "enum": [
+                "string",
+                "boolean",
+                "decimal",
+                "date",
+                "quantity",
+                "object_ref"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Item Type"
+        },
+        "id": {
+          "pattern": "^[a-z][a-z0-9_]{0,63}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "description": {
+          "default": "",
+          "title": "Description",
+          "type": "string"
+        },
+        "aliases": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Aliases",
+          "type": "array"
+        },
+        "subject_types": {
+          "items": {
+            "pattern": "^[a-z][a-z0-9_]{0,63}$",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Subject Types",
+          "type": "array"
+        },
+        "required_conditions": {
+          "items": {
+            "pattern": "^[a-z][a-z0-9_]{0,63}$",
+            "type": "string"
+          },
+          "title": "Required Conditions",
+          "type": "array"
+        },
+        "require_review": {
+          "default": false,
+          "title": "Require Review",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "value_type",
+        "id",
+        "name",
+        "subject_types"
+      ],
+      "title": "Property",
+      "type": "object"
+    },
+    "Quantity": {
+      "additionalProperties": false,
+      "properties": {
+        "value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            }
+          ],
+          "title": "Value"
+        },
+        "unit": {
+          "minLength": 1,
+          "title": "Unit",
+          "type": "string"
+        }
+      },
+      "required": [
+        "value",
+        "unit"
+      ],
+      "title": "Quantity",
+      "type": "object"
+    },
+    "Relation": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^[a-z][a-z0-9_]{0,63}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "description": {
+          "default": "",
+          "title": "Description",
+          "type": "string"
+        },
+        "aliases": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Aliases",
+          "type": "array"
+        },
+        "subject_types": {
+          "items": {
+            "pattern": "^[a-z][a-z0-9_]{0,63}$",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Subject Types",
+          "type": "array"
+        },
+        "object_types": {
+          "items": {
+            "pattern": "^[a-z][a-z0-9_]{0,63}$",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Object Types",
+          "type": "array"
+        },
+        "required_conditions": {
+          "items": {
+            "pattern": "^[a-z][a-z0-9_]{0,63}$",
+            "type": "string"
+          },
+          "title": "Required Conditions",
+          "type": "array"
+        },
+        "require_review": {
+          "default": false,
+          "title": "Require Review",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "subject_types",
+        "object_types"
+      ],
+      "title": "Relation",
+      "type": "object"
+    },
+    "Rule": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^[a-z][a-z0-9_]{0,63}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "description": {
+          "default": "",
+          "title": "Description",
+          "type": "string"
+        },
+        "aliases": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Aliases",
+          "type": "array"
+        },
+        "applies_to": {
+          "items": {
+            "pattern": "^[a-z][a-z0-9_]{0,63}$",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Applies To",
+          "type": "array"
+        },
+        "when": {
+          "$ref": "#/$defs/Condition"
+        },
+        "conclusion": {
+          "minLength": 1,
+          "title": "Conclusion",
+          "type": "string"
+        },
+        "require_review": {
+          "default": true,
+          "title": "Require Review",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "applies_to",
+        "when",
+        "conclusion"
+      ],
+      "title": "Rule",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "pattern": "^[a-z][a-z0-9_]{0,63}$",
+      "title": "Id",
+      "type": "string"
+    },
+    "name": {
+      "minLength": 1,
+      "title": "Name",
+      "type": "string"
+    },
+    "description": {
+      "default": "",
+      "title": "Description",
+      "type": "string"
+    },
+    "aliases": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Aliases",
+      "type": "array"
+    },
+    "schema_version": {
+      "const": "1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "types": {
+      "items": {
+        "$ref": "#/$defs/ObjectType"
+      },
+      "minItems": 1,
+      "title": "Types",
+      "type": "array"
+    },
+    "properties": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Property"
+      },
+      "title": "Properties"
+    },
+    "relations": {
+      "items": {
+        "$ref": "#/$defs/Relation"
+      },
+      "title": "Relations",
+      "type": "array"
+    },
+    "events": {
+      "items": {
+        "$ref": "#/$defs/Event"
+      },
+      "title": "Events",
+      "type": "array"
+    },
+    "rules": {
+      "items": {
+        "$ref": "#/$defs/Rule"
+      },
+      "title": "Rules",
+      "type": "array"
+    },
+    "conditions": {
+      "items": {
+        "$ref": "#/$defs/ConditionDefinition"
+      },
+      "title": "Conditions",
+      "type": "array"
+    },
+    "policies": {
+      "$ref": "#/$defs/Policies"
+    }
+  },
+  "required": [
+    "id",
+    "name",
+    "schema_version",
+    "types"
+  ],
+  "title": "DomainDefinition",
+  "type": "object"
+}

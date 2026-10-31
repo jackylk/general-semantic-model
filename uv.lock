@@ -1,0 +1,138 @@
+version = 1
+revision = 3
+requires-python = ">=3.12"
+resolution-markers = [
+    "sys_platform == 'darwin'",
+]
+supported-markers = [
+    "sys_platform == 'darwin'",
+]
+
+[[package]]
+name = "annotated-types"
+version = "0.7.0"
+source = { registry = "runtime/wheels" }
+wheels = [
+    { path = "annotated_types-0.7.0-py3-none-any.whl" },
+]
+
+[[package]]
+name = "general-semantic-model"
+version = "0.1.0"
+source = { editable = "." }
+dependencies = [
+    { name = "pydantic" },
+    { name = "pyyaml" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "pytest" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "pydantic", specifier = ">=2.10,<3" },
+    { name = "pyyaml", specifier = ">=6,<7" },
+]
+
+[package.metadata.requires-dev]
+dev = [{ name = "pytest", specifier = ">=8,<10" }]
+
+[[package]]
+name = "iniconfig"
+version = "2.1.0"
+source = { registry = "runtime/wheels" }
+wheels = [
+    { path = "iniconfig-2.1.0-py3-none-any.whl" },
+]
+
+[[package]]
+name = "packaging"
+version = "25.0"
+source = { registry = "runtime/wheels" }
+wheels = [
+    { path = "packaging-25.0-py3-none-any.whl" },
+]
+
+[[package]]
+name = "pluggy"
+version = "1.6.0"
+source = { registry = "runtime/wheels" }
+wheels = [
+    { path = "pluggy-1.6.0-py3-none-any.whl" },
+]
+
+[[package]]
+name = "pydantic"
+version = "2.12.5"
+source = { registry = "runtime/wheels" }
+dependencies = [
+    { name = "annotated-types" },
+    { name = "pydantic-core" },
+    { name = "typing-extensions" },
+    { name = "typing-inspection" },
+]
+wheels = [
+    { path = "pydantic-2.12.5-py3-none-any.whl" },
+]
+
+[[package]]
+name = "pydantic-core"
+version = "2.41.5"
+source = { registry = "runtime/wheels" }
+dependencies = [
+    { name = "typing-extensions" },
+]
+wheels = [
+    { path = "pydantic_core-2.41.5-cp312-cp312-macosx_11_0_arm64.whl" },
+]
+
+[[package]]
+name = "pygments"
+version = "2.19.2"
+source = { registry = "runtime/wheels" }
+wheels = [
+    { path = "pygments-2.19.2-py3-none-any.whl" },
+]
+
+[[package]]
+name = "pytest"
+version = "8.4.2"
+source = { registry = "runtime/wheels" }
+dependencies = [
+    { name = "iniconfig" },
+    { name = "packaging" },
+    { name = "pluggy" },
+    { name = "pygments" },
+]
+wheels = [
+    { path = "pytest-8.4.2-py3-none-any.whl" },
+]
+
+[[package]]
+name = "pyyaml"
+version = "6.0.3"
+source = { registry = "runtime/wheels" }
+wheels = [
+    { path = "pyyaml-6.0.3-cp312-cp312-macosx_11_0_arm64.whl" },
+]
+
+[[package]]
+name = "typing-extensions"
+version = "4.15.0"
+source = { registry = "runtime/wheels" }
+wheels = [
+    { path = "typing_extensions-4.15.0-py3-none-any.whl" },
+]
+
+[[package]]
+name = "typing-inspection"
+version = "0.4.2"
+source = { registry = "runtime/wheels" }
+dependencies = [
+    { name = "typing-extensions" },
+]
+wheels = [
+    { path = "typing_inspection-0.4.2-py3-none-any.whl" },
+]

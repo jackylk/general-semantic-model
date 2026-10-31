@@ -1,0 +1,25 @@
+schema_version: '1'
+id: workplace
+name: 企业制度示例
+types:
+  - id: employee
+    name: 员工
+    identity: [staff_id]
+properties:
+  - id: staff_id
+    name: 工号
+    subject_types: [employee]
+    value_type: string
+  - id: allowance
+    name: 补贴金额
+    subject_types: [employee]
+    value_type: quantity
+    units: [CNY]
+    required_conditions: [region]
+conditions:
+  - id: region
+    name: 适用地区
+    value_type: string
+policies:
+  extraction: 保留制度的适用地区、有效期和例外；未给出的条件保持未知。
+  retrieval: 适用地区或版本不清时先说明歧义；不得推断未提供的补贴金额。
