@@ -9,7 +9,7 @@ def main():
     parser=argparse.ArgumentParser(prog='gsm')
     commands=parser.add_subparsers(dest='command',required=True)
     commands.add_parser('migrate')
-    init=commands.add_parser('init-workspaces');init.add_argument('--root',required=True);init.add_argument('--source-root',required=True)
+    init=commands.add_parser('init-workspaces');init.add_argument('--root',required=True)
     for name in ('serve','worker'):
         command=commands.add_parser(name);command.add_argument('--credentials',required=True)
         if name=='worker':
@@ -17,7 +17,7 @@ def main():
     args=parser.parse_args()
     if args.command=='init-workspaces':
         from .workspaces import provision
-        print(json.dumps(provision(Path(args.root),Path(args.source_root)),ensure_ascii=False,indent=2));return
+        print(json.dumps(provision(Path(args.root)),ensure_ascii=False,indent=2));return
     if args.command=='migrate':Store(Settings.load()).migrate();return
     app=Application(args.credentials)
     if args.command=='serve':

@@ -8,7 +8,7 @@ class Settings:
     passwords: dict[str, str] = field(repr=False)
     host: str = '127.0.0.1'
     port: int = 55438
-    source_root: Path = Path('runtime/imports')
+    source_root: Path | None = Path('runtime/imports')
     file_root: Path = Path('runtime/files')
 
     @classmethod

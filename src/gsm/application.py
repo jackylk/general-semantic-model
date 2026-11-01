@@ -19,7 +19,7 @@ class Application:
         config=read_credentials(self.credential_path)
         self.principal=Principal(config['role'],frozenset(config['kb_ids']))
         settings=Settings.load()
-        if config.get('source_root'):settings.source_root=Path(config['source_root']).resolve()
+        settings.source_root=Path(config['source_root']).resolve() if config.get('source_root') else None
         self.store=Store(settings);self.sources=SourceService(self.store);self.build=BuildService(self.store);self.tasks=TaskService(self.store)
 
     def llm(self):

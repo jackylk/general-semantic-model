@@ -6,7 +6,7 @@ Python 3.12，使用 uv.lock 固定当前 macOS 环境依赖。`uv sync --frozen
 
 迁移入口目前为 `Store(Settings.load()).migrate()`，任务表由 `TaskService(store).migrate()` 初始化。自动化测试依赖本项目 PG；执行 `uv run --frozen --no-sync pytest -q`。
 
-原件导入仅允许 `GSM_SOURCE_ROOT` 内相对文件，存储到 `GSM_FILE_ROOT/<kb_id>/<sha256>`，源版本独立于路径。工作目录暂为项目根；发布 CLI 会固定路径解析。
+原件导入仅允许经签名角色配置指定的文档收件目录内的相对文件，存储到 `GSM_FILE_ROOT/<kb_id>/<sha256>`，源版本独立于路径。工作目录暂为项目根；发布 CLI 会固定路径解析。
 
 ## 模型
 
@@ -31,7 +31,7 @@ Embedding 为 http://127.0.0.1:8010/v1，模型 qwen3-embedding-0.6b-mlx，1024 
 
 ```bash
 uv run --frozen python -m gsm.cli migrate
-uv run --frozen python -m gsm.cli init-workspaces --root runtime/workspaces --source-root ../automotive_data
+uv run --frozen python -m gsm.cli init-workspaces --root runtime/workspaces
 uv run --frozen python -m gsm.cli worker --credentials runtime/workspaces/developer/credentials.json
 ```
 
@@ -55,3 +55,5 @@ python3 runtime/workspaces/consumer/start-codex.py
 ```
 
 CLI 会话启动后，开发者输入“我要开始创建知识库”。图形界面方式仍需按客户端提示信任对应工作区，再检查 MCP 连接。已验证的是配置发现和独立 MCP 客户端；实际第二窗口引导体验待用户验收。
+
+新工作区不预选任何外部资料目录。developer/documents 是空的产品收件目录，不代表用户已有资料位置。建库时先由用户提供文件或目录，Codex 将选定样本复制到收件目录，再调用 register_source。不要递归扫描其他项目猜测用户知识来源。

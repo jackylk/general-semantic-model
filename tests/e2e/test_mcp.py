@@ -17,7 +17,8 @@ def unpack(result):
 
 def test_external_mcp_contracts_and_role_boundary(tmp_path):
     kb=str(uuid4());store=Store(Settings.load());store.migrate()
-    profile=tmp_path/'developer.json';write_credentials(profile,'developer',[kb])
+    inbox=tmp_path/'documents';inbox.mkdir()
+    profile=tmp_path/'developer.json';write_credentials(profile,'developer',[kb],inbox)
     consumer=tmp_path/'consumer.json';write_credentials(consumer,'consumer',[kb])
     async def exercise():
         params=StdioServerParameters(command=sys.executable,args=['-m','gsm.cli','serve','--credentials',str(profile)])
@@ -26,8 +27,19 @@ def test_external_mcp_contracts_and_role_boundary(tmp_path):
                 await session.initialize()
                 spec=unpack(await session.call_tool('discover_spec',{}))
                 assert spec['entry_phrase']=='我要开始创建知识库'
+                assert spec['source_policy']=='ask_user_for_documents'
+                assert 'source_root' not in spec
+                assert list(inbox.iterdir())==[]
                 created=unpack(await session.call_tool('create_kb',{'kb_id':kb,'name':'公开接口测试'}))
                 assert created['kb_id']==kb
+                # User selects a file outside the product; Codex stages only that selection.
+                import shutil
+                supplied=tmp_path/'user-supplied.txt';supplied.write_text('用户主动提供的知识文档')
+                shutil.copy2(supplied,inbox/supplied.name)
+                registered=unpack(await session.call_tool('register_source',{'kb_id':kb,'relative_path':supplied.name}))
+                assert registered['byte_count']==len('用户主动提供的知识文档'.encode())
+                denied_path=unpack(await session.call_tool('register_source',{'kb_id':kb,'relative_path':str(supplied)}))
+                assert denied_path['error']['code']=='INVALID_SOURCE'
                 bad=unpack(await session.call_tool('validate_domain',{'definition':{'sql':'SELECT secret'}}))
                 assert bad['error']['code']=='INVALID_DOMAIN'
                 foreign=unpack(await session.call_tool('describe_kb',{'kb_id':str(uuid4())}))

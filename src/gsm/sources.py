@@ -9,6 +9,7 @@ class SourceService:
 
     def import_file(self, principal,kb_id,relative_path):
         principal.require(kb_id,write=True)
+        if self.store.settings.source_root is None:raise ProductError('SOURCE_NOT_CONFIGURED','尚未配置文档收件入口，请先完成工作区初始化并由用户提供资料')
         root=self.store.settings.source_root.resolve()
         path=(root/relative_path).resolve()
         if Path(relative_path).is_absolute() or not path.is_relative_to(root) or not path.is_file():

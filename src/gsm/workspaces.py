@@ -4,14 +4,16 @@ from uuid import uuid4
 from .errors import ProductError
 
 
-def provision(root:Path,source_root:Path):
+def provision(root:Path):
     root=root.resolve();product=Path.cwd();kb_id=str(uuid4())
     if root.exists() and any(root.iterdir()):raise ProductError('WORKSPACE_EXISTS','工作区非空，拒绝覆盖')
     result={}
     for role,server in [('developer','gsm_developer'),('consumer','gsm_consumer')]:
         path=root/role;path.mkdir(parents=True);(path/'.codex').mkdir()
         from .credentials import write_credentials
-        credential=path/'credentials.json';write_credentials(credential,role,[kb_id],source_root.resolve())
+        inbox=path/'documents'
+        if role=='developer':inbox.mkdir()
+        credential=path/'credentials.json';write_credentials(credential,role,[kb_id],inbox if role=='developer' else None)
         config=f'[mcp_servers.{server}]\ncommand = {json.dumps(sys.executable)}\nargs = {json.dumps(["-m","gsm.cli","serve","--credentials",str(credential)])}\ncwd = {json.dumps(str(product))}\nstartup_timeout_sec = 20\ntool_timeout_sec = 300\n'
         (path/'.codex/config.toml').write_text(config)
         if role=='developer':

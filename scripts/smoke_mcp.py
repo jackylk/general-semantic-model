@@ -19,7 +19,7 @@ def unpack(result):
 
 async def main(pdf=False):
     kb=str(uuid4());run=ROOT/'runtime'/('smoke-'+kb);run.mkdir(parents=True)
-    profile=run/'developer.json';write_credentials(profile,'developer',[kb])
+    profile=run/'developer.json';write_credentials(profile,'developer',[kb],ROOT/'runtime/imports')
     inputs=ROOT/'runtime/imports';inputs.mkdir(parents=True,exist_ok=True)
     source=inputs/('smoke-'+kb+('.pdf' if pdf else '.txt'))
     if pdf:
