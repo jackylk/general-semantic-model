@@ -374,6 +374,28 @@
     }
   },
   {
+    "name": "withdraw_source",
+    "description": "",
+    "inputSchema": {
+      "properties": {
+        "kb_id": {
+          "title": "Kb Id",
+          "type": "string"
+        },
+        "source_version_id": {
+          "title": "Source Version Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kb_id",
+        "source_version_id"
+      ],
+      "title": "withdraw_sourceArguments",
+      "type": "object"
+    }
+  },
+  {
     "name": "validate_domain",
     "description": "",
     "inputSchema": {

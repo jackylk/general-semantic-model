@@ -137,3 +137,75 @@ def test_source_statement_cannot_attach_unstated_number_to_real_quote(build_env)
     result=b.ingest(p,kb,dv,data)
     assert 'VALUE_NOT_IN_EVIDENCE' in {i['code'] for i in result['candidates'][-1]['issues']}
     with pytest.raises(ProductError):review.decide(p,kb,[result['candidates'][-1]['id']],'confirm','approve')
+
+
+def test_unstated_condition_and_unit_are_not_verified(build_env):
+    store,b,review,p,kb,dv,block=build_env
+    data=candidates(block);data[-1]['conditions']['temperature']='999'
+    result=b.ingest(p,kb,dv,data)
+    assert 'CONDITION_NOT_IN_EVIDENCE' in {i['code'] for i in result['candidates'][-1]['issues']}
+    # A declared alternative unit is not a license to reinterpret the source.
+    from copy import deepcopy
+    domain=deepcopy(DOMAIN);domain['properties'][1]['units']=['W','kW'];dv=b.submit_domain(p,kb,domain)
+    data=candidates(block);data[-1]['value']['unit']='kW'
+    result=b.ingest(p,kb,dv,data)
+    assert 'UNIT_NOT_IN_EVIDENCE' in {i['code'] for i in result['candidates'][-1]['issues']}
+
+
+def test_chinese_magnitude_compared_with_source_quantity(build_env):
+    store,b,review,p,kb,dv,block=build_env
+    from copy import deepcopy
+    from gsm.sources import SourceService
+    domain=deepcopy(DOMAIN);domain['properties'][1]['units']=['元'];dv=b.submit_domain(p,kb,domain)
+    (store.settings.source_root/'scaled.txt').write_text('设备 A 序号 001。20℃时设备 A 标价 10 万元。')
+    src=SourceService(store);v=src.import_file(p,kb,'scaled.txt');parsed=src.save_parse(p,kb,v['id'],'test',[{'text':'设备 A 序号 001。20℃时设备 A 标价 10 万元。'}]);bid=parsed['blocks'][0]['id']
+    data=[{'kind':'object','local_id':'a','type_id':'device','name':'设备 A','identity':{'serial':'001'},'evidence':[{'block_id':bid,'quote':'设备 A 序号 001'}]},
+          {'kind':'assertion','subject':'a','predicate':'power','value':{'value':'100000','unit':'元'},'conditions':{'temperature':'20'},'evidence':[{'block_id':bid,'quote':'20℃时设备 A 标价 10 万元'}]}]
+    correct=b.ingest(p,kb,dv,data)
+    assert correct['candidates'][-1]['status']=='verified'
+    data[-1]['value']['value']='10'
+    wrong=b.ingest(p,kb,dv,data)
+    assert 'VALUE_NOT_IN_EVIDENCE' in {i['code'] for i in wrong['candidates'][-1]['issues']}
+
+
+def test_rejected_and_withdrawn_assertions_do_not_conflict(build_env):
+    store,b,review,p,kb,dv,block=build_env
+    first=b.ingest(p,kb,dv,candidates(block))
+    review.decide(p,kb,[first['candidates'][-1]['id']],'reject','错误抽取，排除')
+    data=candidates(block);data[-1]['value']['value']='11.25'
+    result=b.ingest(p,kb,dv,data)
+    assert 'CONFLICT' not in {i['code'] for i in result['candidates'][-1]['issues']}
+    # Remaining source supports have also been explicitly withdrawn.
+    with store.transaction(p,kb) as conn:
+        source_id=str(conn.execute('SELECT source_version_id FROM parse_versions WHERE kb_id=%s',(kb,)).fetchone()[0])
+    SourceService(store).withdraw(p,kb,source_id)
+    result=b.ingest(p,kb,dv,candidates(block))
+    assert 'CONFLICT' not in {i['code'] for i in result['candidates'][-1]['issues']}
+
+
+def test_extra_identity_keys_do_not_split_stable_object(build_env):
+    store,b,review,p,kb,dv,block=build_env
+    first=b.ingest(p,kb,dv,candidates(block))
+    data=candidates(block);data[0]['identity']['color']='red'
+    second=b.ingest(p,kb,dv,data)
+    assert first['objects']['a']==second['objects']['a']
+    assert 'UNDECLARED_IDENTITY_FIELD' in {i['code'] for i in second['candidates'][0]['issues']}
+
+
+def test_declared_unit_aliases_support_chinese_magnitude(build_env):
+    from gsm.grounding import grounded
+    from gsm.domain import Property
+    definition=Property(id='price',name='售价',subject_types=['device'],value_type='quantity',units=['CNY'],unit_aliases={'CNY':['元']})
+    assert grounded({'value':'100000','unit':'CNY'},definition,'售价 10 万元')
+    assert not grounded({'value':'10','unit':'CNY'},definition,'售价 10 万元')
+
+
+def test_decimal_identity_is_canonicalized_and_rejected_repair_is_excluded(build_env):
+    from copy import deepcopy
+    store,b,review,p,kb,dv,block=build_env
+    domain=deepcopy(DOMAIN);domain['properties'][0]['value_type']='decimal';dv=b.submit_domain(p,kb,domain)
+    one=candidates(block)[:1];one[0]['identity']['serial']='1.0'
+    first=b.ingest(p,kb,dv,one)
+    one[0]['identity']['serial']='1.00'
+    second=b.ingest(p,kb,dv,one)
+    assert first['objects']['a']==second['objects']['a']

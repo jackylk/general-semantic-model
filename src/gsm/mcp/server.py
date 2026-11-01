@@ -94,6 +94,10 @@ def create_server(app:Application):
         return app.sources.import_file(p,kb_id,relative_path)
 
     @tool
+    def withdraw_source(kb_id:str,source_version_id:str)->dict:
+        app.sources.withdraw(p,kb_id,source_version_id);return {'status':'withdrawn_for_future_builds','source_version_id':source_version_id}
+
+    @tool
     def validate_domain(definition:dict)->dict:
         return {'valid':True,'definition':validate(definition).model_dump(mode='json')}
 
@@ -122,8 +126,10 @@ def create_server(app:Application):
         p.require(kb_id,write=True)
         if not 1<=limit<=200 or offset<0:raise ProductError('INVALID_LIMIT','limit 1–200，offset 非负')
         with store.transaction(p,kb_id) as conn:
-            rows=conn.execute("SELECT id,kind,payload,status FROM records WHERE kb_id=%s AND payload->>'domain_version_id'=%s ORDER BY id LIMIT %s OFFSET %s",(kb_id,domain_version_id,limit,offset)).fetchall()
-        return {'candidates':[{'id':str(r[0]),'kind':r[1],'payload':r[2],'initial_status':r[3]} for r in rows]}
+            rows=conn.execute("""SELECT r.id,r.kind,r.payload,r.status,d.decision,d.reason FROM records r
+                LEFT JOIN LATERAL (SELECT decision,reason FROM review_decisions d WHERE d.kb_id=r.kb_id AND d.record_id=r.id ORDER BY created_at DESC,id DESC LIMIT 1) d ON true
+                WHERE r.kb_id=%s AND r.payload->>'domain_version_id'=%s ORDER BY r.id LIMIT %s OFFSET %s""",(kb_id,domain_version_id,limit,offset)).fetchall()
+        return {'candidates':[{'id':str(r[0]),'kind':r[1],'payload':r[2],'initial_status':r[3],'current_status':('confirmed' if r[4]=='confirm' else 'rejected' if r[4]=='reject' else r[3]),'review_reason':r[5]} for r in rows]}
 
     @tool
     def review_candidates(kb_id:str,candidate_ids:list[str],decision:str,reason:str)->dict:
@@ -165,7 +171,7 @@ def create_server(app:Application):
     @tool
     def list_conflicts(kb_id:str,domain_version_id:str)->dict:
         result=list_candidates(kb_id,domain_version_id,limit=200)
-        return {'conflicts':[c for c in result['candidates'] if any(i['code']=='CONFLICT' for i in c['payload'].get('issues',[]))]}
+        return {'conflicts':[c for c in result['candidates'] if c['current_status']=='candidate' and any(i['code']=='CONFLICT' for i in c['payload'].get('issues',[]))]}
 
     @tool
     def diff_releases(kb_id:str,old_release_id:str,new_release_id:str)->dict:

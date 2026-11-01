@@ -91,7 +91,7 @@ class BuildService:
         types={t.id:t for t in domain.types};props={p.id:p for p in domain.properties};rels={r.id:r for r in domain.relations};conds={c.id:c for c in domain.conditions}
         objects={};object_types={};unresolved=set();results=[]
         with self.store.transaction(principal,kb_id) as conn:
-            existing=conn.execute("SELECT payload FROM records WHERE kb_id=%s AND kind='object' AND status IN ('verified','confirmed')",(kb_id,)).fetchall()
+            existing=[(row[1],) for row in self._effective_records(conn,kb_id,domain_version_id,'object')]
             for row in existing:
                 payload=row[0]
                 if payload.get('object_id'): object_types[payload['object_id']]=payload.get('type_id')
@@ -100,7 +100,8 @@ class BuildService:
                 if not c.local_id or c.local_id in objects: raise ProductError('INVALID_EXTRACTION','对象 local_id 缺失或重复')
                 definition=types.get(c.type_id)
                 valid=definition and definition.identity and all(k in c.identity and not value_issues(c.identity[k],props[k]) for k in definition.identity)
-                key=sha256(json.dumps([c.type_id,c.identity],sort_keys=True,ensure_ascii=False).encode()).hexdigest() if valid else 'unresolved:'+c.local_id
+                canonical={k:(str(Decimal(str(c.identity[k])).normalize()) if props[k].value_type=='decimal' else c.identity[k]) for k in definition.identity} if valid else {}
+                key=sha256(json.dumps([c.type_id,canonical],sort_keys=True,ensure_ascii=False).encode()).hexdigest() if valid else 'unresolved:'+c.local_id
                 objects[c.local_id]=key;object_types[key]=c.type_id
                 if not valid: unresolved.add(key)
             for c in candidates:
@@ -113,6 +114,7 @@ class BuildService:
                     payload['object_id']=objects[c.local_id]
                     if payload['object_id'] in unresolved: add('IDENTITY_UNRESOLVED')
                     if c.type_id not in types: add('UNKNOWN_TYPE')
+                    elif set(c.identity)-set(types[c.type_id].identity):add('UNDECLARED_IDENTITY_FIELD')
                 elif c.kind in ('assertion','relation'):
                     subject=objects.get(c.subject,c.subject);payload['subject']=subject
                     if subject not in object_types or subject in unresolved: add('SUBJECT_UNRESOLVED')
@@ -160,7 +162,7 @@ class BuildService:
                     else:
                         for code in value_issues(value,conds[key]): add(code)
                 if c.kind=='assertion' and not any(i['fatal'] for i in issues):
-                    previous=conn.execute("SELECT id,payload FROM records WHERE kb_id=%s AND kind='assertion' AND payload->>'subject'=%s AND payload->>'predicate'=%s",(kb_id,payload.get('subject'),c.predicate)).fetchall()
+                    previous=[(rid,old) for rid,old in self._effective_records(conn,kb_id,domain_version_id,'assertion') if old.get('subject')==payload.get('subject') and old.get('predicate')==c.predicate]
                     conflicting=[str(rid) for rid,old in previous if not any(i.get('fatal') for i in old.get('issues',[])) and old.get('conditions',{})==c.conditions and old.get('valid_from')==c.valid_from and old.get('valid_to')==c.valid_to and old.get('value')!=c.value]
                     if conflicting:
                         add('CONFLICT',False)
@@ -170,16 +172,18 @@ class BuildService:
                     row=conn.execute('SELECT text FROM source_blocks WHERE kb_id=%s AND id=%s',(kb_id,e.block_id)).fetchone()
                     if not row or e.quote not in row[0]: add('EVIDENCE_NOT_LOCATED')
                     else: links.append((e,row[0].index(e.quote)))
-                if c.kind=='assertion' and c.provenance in ('source_statement','observation'):
-                    definition=props.get(c.predicate)
-                    if definition and definition.value_type in ('quantity','decimal') and not value_issues(c.value,definition):
-                        number=c.value['value'] if definition.value_type=='quantity' else c.value
-                        quoted_numbers=set()
-                        for evidence,_ in links:
-                            for token in re.findall(r'[-+]?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?',evidence.quote):
-                                try:quoted_numbers.add(Decimal(token))
-                                except InvalidOperation:pass
-                        if Decimal(str(number)) not in quoted_numbers:add('VALUE_NOT_IN_EVIDENCE')
+                if c.provenance in ('source_statement','observation'):
+                    from .grounding import grounded,numbers,quantities
+                    quotes='\n'.join(e.quote for e,_ in links)
+                    for key,value in c.conditions.items():
+                        if key in conds and not value_issues(value,conds[key]) and not grounded(value,conds[key],quotes):add('CONDITION_NOT_IN_EVIDENCE')
+                    if c.kind=='assertion':
+                        definition=props.get(c.predicate)
+                        if definition and definition.value_type in ('quantity','decimal') and not value_issues(c.value,definition):
+                            if not grounded(c.value,definition,quotes):
+                                number=c.value['value'] if definition.value_type=='quantity' else c.value
+                                if Decimal(str(number)) not in numbers(quotes):add('VALUE_NOT_IN_EVIDENCE')
+                                else:add('UNIT_NOT_IN_EVIDENCE')
                 if not links: add('EVIDENCE_REQUIRED')
                 payload['issues']=issues;status='candidate' if issues else 'verified'
                 record_id=str(conn.execute('INSERT INTO records(kb_id,kind,payload,status) VALUES(%s,%s,%s,%s) RETURNING id',(kb_id,c.kind if c.kind in ('object','assertion','relation','event','rule') else 'assertion',Jsonb(payload),status)).fetchone()[0])
@@ -187,6 +191,14 @@ class BuildService:
                     conn.execute('INSERT INTO evidence_links(kb_id,record_id,block_id,quote,start_offset,end_offset) VALUES(%s,%s,%s,%s,%s,%s)',(kb_id,record_id,e.block_id,e.quote,start,start+len(e.quote)))
                 results.append({'id':record_id,'status':status,'issues':issues,'payload':payload})
         return {'objects':objects,'candidates':results}
+
+    def _effective_records(self,conn,kb_id,domain_version_id,kind):
+        return conn.execute("""SELECT r.id,r.payload FROM records r
+            LEFT JOIN LATERAL (SELECT decision FROM review_decisions d WHERE d.kb_id=r.kb_id AND d.record_id=r.id ORDER BY created_at DESC,id DESC LIMIT 1) d ON true
+            WHERE r.kb_id=%s AND r.kind=%s AND r.payload->>'domain_version_id'=%s
+            AND COALESCE(d.decision,'')<>'reject' AND (r.status IN ('verified','confirmed') OR d.decision='confirm')
+            AND EXISTS(SELECT 1 FROM evidence_links e JOIN source_blocks b ON b.kb_id=e.kb_id AND b.id=e.block_id JOIN parse_versions p ON p.kb_id=b.kb_id AND p.id=b.parse_version_id
+                WHERE e.kb_id=r.kb_id AND e.record_id=r.id AND NOT EXISTS(SELECT 1 FROM source_withdrawals w WHERE w.kb_id=p.kb_id AND w.source_version_id=p.source_version_id))""",(kb_id,kind,domain_version_id)).fetchall()
 
     def finish(self,principal,kb_id,domain_version_id,record_ids,embed=True):
         from .search import tokenize

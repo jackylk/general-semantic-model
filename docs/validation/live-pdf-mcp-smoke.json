@@ -1,0 +1,234 @@
+{
+  "scope": "live model, synthetic source, public MCP smoke; not independent user/domain acceptance",
+  "kb_id": "dc92e2f5-512b-4a15-ad57-f9b3d15b8438",
+  "release_id": "ed71f781-ddcc-430d-9455-6d382521be3e",
+  "source_format": "pdf",
+  "candidate_count": 2,
+  "search_hits": 2,
+  "answer": {
+    "answer": "工号 E001 对应员工 John；在适用地区为上海（Shanghai）的条件下，月度补贴为 100.50 CNY。",
+    "status": "supported",
+    "citations": [
+      "ba7fe180-8787-4353-98d2-3ea64620de98",
+      "6c660a6f-c7d7-4b5c-8278-d25d6cf1e84f"
+    ],
+    "kb_id": "dc92e2f5-512b-4a15-ad57-f9b3d15b8438",
+    "release_id": "ed71f781-ddcc-430d-9455-6d382521be3e",
+    "trace": [
+      {
+        "plan": {
+          "action": "search",
+          "args": {
+            "query": "工号 E001 员工 上海地区 月度补贴 标准"
+          }
+        },
+        "executed": true,
+        "usage": {
+          "prompt_tokens": 252,
+          "completion_tokens": 25,
+          "total_tokens": 277,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          },
+          "prompt_cache_hit_tokens": 0,
+          "prompt_cache_miss_tokens": 252
+        },
+        "result": [
+          {
+            "id": "707c53aa-fc34-4c18-b914-9e9f6f30bbef",
+            "kind": "object",
+            "payload": {
+              "kind": "object",
+              "name": "John",
+              "value": null,
+              "issues": [],
+              "object": null,
+              "subject": null,
+              "type_id": "employee",
+              "evidence": [
+                {
+                  "quote": "Employee John has staff ID E001.",
+                  "block_id": "6958f033-b787-4a1d-9ef7-62e06cadd8f1"
+                }
+              ],
+              "identity": {
+                "staff_id": "E001"
+              },
+              "local_id": "emp_john",
+              "valid_to": null,
+              "object_id": "8b9c55a9cc140d36386e2725c5b57b265d89b0f5b819fd34afe0084e9c34fe76",
+              "predicate": null,
+              "conditions": {},
+              "provenance": "source_statement",
+              "valid_from": null,
+              "participants": [],
+              "domain_version_id": "357b9820-0e4f-4858-a10a-b24bed84f4a6"
+            },
+            "evidence_ids": [
+              "ba7fe180-8787-4353-98d2-3ea64620de98"
+            ],
+            "release_id": "ed71f781-ddcc-430d-9455-6d382521be3e",
+            "score": 0.01639344262295082
+          },
+          {
+            "id": "e8699409-84c0-4aa3-833f-a08d660b6d27",
+            "kind": "assertion",
+            "payload": {
+              "kind": "assertion",
+              "name": "",
+              "value": {
+                "unit": "CNY",
+                "value": "100.50"
+              },
+              "issues": [],
+              "object": null,
+              "subject": "8b9c55a9cc140d36386e2725c5b57b265d89b0f5b819fd34afe0084e9c34fe76",
+              "type_id": null,
+              "evidence": [
+                {
+                  "quote": "When the applicable region is Shanghai, monthly allowance is 100.50 CNY.",
+                  "block_id": "5d58b4aa-7b3c-4b18-ac01-76f01c597317"
+                }
+              ],
+              "identity": {},
+              "local_id": "assert_allowance_shanghai",
+              "valid_to": null,
+              "predicate": "allowance",
+              "conditions": {
+                "region": "Shanghai"
+              },
+              "provenance": "source_statement",
+              "valid_from": null,
+              "participants": [],
+              "domain_version_id": "357b9820-0e4f-4858-a10a-b24bed84f4a6"
+            },
+            "evidence_ids": [
+              "6c660a6f-c7d7-4b5c-8278-d25d6cf1e84f"
+            ],
+            "release_id": "ed71f781-ddcc-430d-9455-6d382521be3e",
+            "score": 0.016129032258064516
+          }
+        ]
+      },
+      {
+        "plan": {
+          "action": "read_evidence",
+          "args": {
+            "evidence_id": "6c660a6f-c7d7-4b5c-8278-d25d6cf1e84f"
+          }
+        },
+        "executed": true,
+        "usage": {
+          "prompt_tokens": 956,
+          "completion_tokens": 41,
+          "total_tokens": 997,
+          "prompt_tokens_details": {
+            "cached_tokens": 128
+          },
+          "prompt_cache_hit_tokens": 128,
+          "prompt_cache_miss_tokens": 828
+        },
+        "result": {
+          "id": "6c660a6f-c7d7-4b5c-8278-d25d6cf1e84f",
+          "release_id": "ed71f781-ddcc-430d-9455-6d382521be3e",
+          "quote": "When the applicable region is Shanghai, monthly allowance is 100.50 CNY.",
+          "text": "When the applicable region is Shanghai, monthly allowance is 100.50 CNY.",
+          "locator": {
+            "bbox": [
+              0.084,
+              0.132,
+              0.757,
+              0.148
+            ],
+            "page": 1,
+            "type": "text",
+            "index": 2,
+            "content": [
+              {
+                "type": "text",
+                "content": "When the applicable region is Shanghai, monthly allowance is 100.50 CNY."
+              }
+            ],
+            "block_index": 2
+          },
+          "fingerprint": "31cd15107a7f6f598da38a5e0954e21afaa4cb35b9708fa0de28756bc1f2538b",
+          "source_version_id": "5df2df2f-92d8-4e5a-ac1e-fd7397cbcf31",
+          "parse_version_id": "70b3c1b7-a218-4d60-b37b-bb5f96bc49b7",
+          "start_offset": 0,
+          "end_offset": 72
+        }
+      },
+      {
+        "plan": {
+          "action": "read_evidence",
+          "args": {
+            "evidence_id": "ba7fe180-8787-4353-98d2-3ea64620de98"
+          }
+        },
+        "executed": true,
+        "usage": {
+          "prompt_tokens": 1311,
+          "completion_tokens": 35,
+          "total_tokens": 1346,
+          "prompt_tokens_details": {
+            "cached_tokens": 896
+          },
+          "prompt_cache_hit_tokens": 896,
+          "prompt_cache_miss_tokens": 415
+        },
+        "result": {
+          "id": "ba7fe180-8787-4353-98d2-3ea64620de98",
+          "release_id": "ed71f781-ddcc-430d-9455-6d382521be3e",
+          "quote": "Employee John has staff ID E001.",
+          "text": "Employee John has staff ID E001.",
+          "locator": {
+            "bbox": [
+              0.084,
+              0.096,
+              0.389,
+              0.112
+            ],
+            "page": 1,
+            "type": "text",
+            "index": 1,
+            "content": [
+              {
+                "type": "text",
+                "content": "Employee John has staff ID E001."
+              }
+            ],
+            "block_index": 1
+          },
+          "fingerprint": "cb53d0cf4642dd830eba5e221f4c49b92c6559652f0606b9d9a4a0c3523e0d9d",
+          "source_version_id": "5df2df2f-92d8-4e5a-ac1e-fd7397cbcf31",
+          "parse_version_id": "70b3c1b7-a218-4d60-b37b-bb5f96bc49b7",
+          "start_offset": 0,
+          "end_offset": 32
+        }
+      },
+      {
+        "plan": {
+          "action": "finish",
+          "answer": "工号 E001 对应员工 John；在适用地区为上海（Shanghai）的条件下，月度补贴为 100.50 CNY。",
+          "citations": [
+            "ba7fe180-8787-4353-98d2-3ea64620de98",
+            "6c660a6f-c7d7-4b5c-8278-d25d6cf1e84f"
+          ],
+          "status": "supported"
+        },
+        "executed": false,
+        "usage": {
+          "prompt_tokens": 1634,
+          "completion_tokens": 97,
+          "total_tokens": 1731,
+          "prompt_tokens_details": {
+            "cached_tokens": 1280
+          },
+          "prompt_cache_hit_tokens": 1280,
+          "prompt_cache_miss_tokens": 354
+        }
+      }
+    ],
+    "total_tokens": 4351
+  }
+}

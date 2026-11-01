@@ -31,3 +31,11 @@ value_type 支持 string、boolean、decimal、enum、date、interval、quantity
 `validate_domain(data: dict) -> DomainDefinition` 返回可序列化模型；失败抛出 `ProductError`，code 为 INVALID_DOMAIN，details 包含 path 和 reason，不包含原始输入。未知字段也报错，不静默丢弃。机器 Schema 位于 `docs/reference/domain.schema.json`，它检查结构；跨定义引用必须调用校验器，不能仅依赖 JSON Schema。
 
 当前不支持领域包包含可执行代码。分离的 extraction/retrieval 文件将在包加载器中限定为包内相对路径，尚未实现前请把说明放入 policies。
+
+## 证据门禁补充
+
+数量单位可声明 `unit_aliases`，例如 `units: [CNY]` 与 `unit_aliases: {CNY: [元]}`。别名必须是同单位的不同写法，不能把有不同数量级的单位直接当等价别名；产品解析原文的阿拉伯数字以及“万、亿、万亿”倍率，再与数值和单位共同比较。未声明的单位解释不会自动确认。
+
+source_statement/observation 的数值、单位和条件值必须可在引用中找到依据。检查失败会进入修正候选；用户不能直接确认绕过必要的证据检查。这些是必要的词面检查，仍不能证明主语、条件和结论之间的业务含义正确；真实领域必须经过人工证据基准及独立窗口验收。
+
+身份键只按定义中声明的 identity 属性构造；额外身份字段会被报错，decimal 身份值规范化后比较。自动修正被替代的尝试保留审核轨迹，但不再作为有效事实制造冲突。已拒绝、已失去全部有效来源支持或其他领域定义版本中的记录不参与本次自动冲突比较。

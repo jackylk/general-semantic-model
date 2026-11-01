@@ -66,12 +66,15 @@ class ObjectType(Named):
 class TypedValue(StrictModel):
     value_type: ValueType
     units: list[str] = Field(default_factory=list)
+    unit_aliases: dict[str,list[Annotated[str,Field(min_length=1,max_length=32)]]] = Field(default_factory=dict)
     enum_values: list[str] = Field(default_factory=list)
     reference_types: list[Id] = Field(default_factory=list)
     item_type: Literal['string', 'boolean', 'decimal', 'date', 'quantity', 'object_ref'] | None = None
 
     @model_validator(mode='after')
     def value_contract(self) -> Self:
+        if self.unit_aliases and (not set(self.unit_aliases)<=set(self.units) or self.value_type not in ('quantity','list')):
+            raise ValueError('unit_aliases keys must be declared quantity units')
         if self.value_type == 'enum' and not self.enum_values:
             raise ValueError('enum requires enum_values')
         if self.value_type != 'enum' and self.enum_values:

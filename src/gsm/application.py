@@ -67,6 +67,9 @@ class Application:
             invalid=[{'candidate':c['payload'],'issues':c['issues']} for c in result['candidates'] if any(i['fatal'] for i in c['issues'])]
             attempts.append({'candidate_ids':[c['id'] for c in result['candidates']],'invalid_count':len(invalid)})
             if not invalid:break
+            if attempt==0:
+                from .review import ReviewService
+                ReviewService(self.store).decide(self.principal,kb_id,[c['id'] for c in result['candidates']],'reject','系统自动纠错替代本次尝试，非人工业务确认')
             prompt['repair']={'instruction':'按具体错误修正整个候选批次。不能补造证据或身份；资料无法确定的保留未决。','previous_candidates':raw,'errors':invalid}
         return {'result':result,'usage':usage,'model':response.model,'attempts':len(attempts),'attempt_log':attempts}
 
