@@ -54,3 +54,14 @@ class TaskService:
                 raise ProductError('NOT_RETRYABLE','任务不是可重试的失败状态')
             conn.execute("UPDATE tasks SET status='queued',error=NULL,updated_at=now() WHERE kb_id=%s AND id=%s",(kb_id,task_id))
         return self.get(principal,kb_id,task_id)
+
+    def cancel(self,principal,kb_id,task_id):
+        principal.require(kb_id,write=True)
+        with self.store.transaction(principal,kb_id) as conn:
+            if not conn.execute('SELECT pg_try_advisory_xact_lock(hashtextextended(%s,0))',(task_id,)).fetchone()[0]:
+                raise ProductError('TASK_BUSY','任务正在执行，不能取消；请稍后重试',retryable=True)
+            row=conn.execute('SELECT status FROM tasks WHERE kb_id=%s AND id=%s FOR UPDATE',(kb_id,task_id)).fetchone()
+            if not row:raise ProductError('NOT_FOUND','任务不存在或无权限')
+            if row[0]=='succeeded':raise ProductError('NOT_CANCELLABLE','已完成任务不能取消')
+            conn.execute("UPDATE tasks SET status='cancelled',updated_at=now() WHERE kb_id=%s AND id=%s",(kb_id,task_id))
+        return self.get(principal,kb_id,task_id)

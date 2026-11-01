@@ -12,7 +12,7 @@ class Completion:
     usage: dict
 
 class LLM:
-    def __init__(self,base_url,model,api_key,*,allow_local=False,timeout=45,max_tokens=4096):
+    def __init__(self,base_url,model,api_key,*,allow_local=False,timeout=120,max_tokens=16384):
         parsed=urlsplit(base_url)
         if parsed.scheme!='https' and not (allow_local and parsed.scheme=='http' and parsed.hostname in ('127.0.0.1','localhost')):
             raise ProductError('INVALID_CONFIG','LLM 地址必须使用 HTTPS')
@@ -30,13 +30,15 @@ class LLM:
             'messages':[{'role':'system','content':system},{'role':'user','content':prompt}],
             'response_format':{'type':'json_object'},'thinking':{'type':'disabled'},'max_tokens':self.max_tokens},
             {'Authorization':'Bearer '+self._api_key},timeout=self.timeout,retries=1)
+        reason='invalid_structure'
         try:
             choice=data['choices'][0]
+            reason='truncated' if choice.get('finish_reason')=='length' else 'empty_or_invalid_json'
             if choice['finish_reason']!='stop': raise ValueError('incomplete')
             parsed=json.loads(choice['message']['content'])
             if not isinstance(parsed,dict): raise ValueError('object required')
         except (KeyError,IndexError,TypeError,ValueError):
-            raise ProductError('INVALID_MODEL_OUTPUT','模型返回空、截断或不合法的 JSON 对象') from None
+            raise ProductError('INVALID_MODEL_OUTPUT','模型返回空、截断或不合法的 JSON 对象',[{'reason':reason,'max_tokens':self.max_tokens,'usage':data.get('usage',{})}]) from None
         return Completion(parsed,data.get('model',self.model),data.get('usage',{}))
 
     def extract(self,schema,blocks,policy):

@@ -11,7 +11,7 @@ class Worker:
             acquired=lock_conn.execute('SELECT pg_try_advisory_xact_lock(hashtextextended(%s,0))',(task_id,)).fetchone()[0]
             if not acquired: raise ProductError('TASK_BUSY','任务正在执行',retryable=True)
             task=self.tasks.get(principal,kb_id,task_id)
-            if task['status']=='succeeded': return task
+            if task['status'] in ('succeeded','cancelled'): return task
             if task['kind'] not in self.handlers: raise ProductError('UNKNOWN_TASK','不支持的任务类型')
             self.tasks.checkpoint(principal,kb_id,task_id,task['stage'],task['checkpoint'])
             try:

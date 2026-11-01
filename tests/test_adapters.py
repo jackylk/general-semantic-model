@@ -73,3 +73,10 @@ Path(args[args.index('-o')+1]).write_text(json.dumps({'pages':[{'page_idx':0,'bl
     command.chmod(0o755);source=tmp_path/'source.pdf';source.write_bytes(b'%PDF-test')
     result=Parser(command=str(command)).parse(source)
     assert result.blocks[0]['text']=='native text'
+
+
+def test_truncation_error_explains_output_budget_without_leaking_content(endpoint):
+    url,h=endpoint;h.payload={'choices':[{'message':{'content':'private partial source'},'finish_reason':'length'}],'usage':{'completion_tokens':4096}}
+    with pytest.raises(ProductError) as exc:LLM(url,'test','secret',allow_local=True).complete('json')
+    assert exc.value.details[0]['reason']=='truncated'
+    assert 'private partial source' not in str(exc.value.as_dict())

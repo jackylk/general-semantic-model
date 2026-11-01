@@ -119,6 +119,10 @@ def create_server(app:Application):
         return app.tasks.get(p,kb_id,task_id)
 
     @tool
+    def cancel_task(kb_id:str,task_id:str)->dict:
+        return app.tasks.cancel(p,kb_id,task_id)
+
+    @tool
     def retry_task(kb_id:str,task_id:str)->dict:
         return app.tasks.retry(p,kb_id,task_id)
 

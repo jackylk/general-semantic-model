@@ -48,3 +48,14 @@ def test_retryable_failure_requeues_same_task_and_preserves_checkpoint():
     retried=tasks.retry(p,kb,task['id'])
     assert retried['id']==task['id'] and retried['status']=='queued'
     assert retried['checkpoint']=={'blocks':2}
+
+
+def test_cancelled_queued_task_never_executes_and_cancel_is_idempotent():
+    from gsm.worker import Worker
+    store=Store(Settings.load());store.migrate();kb=str(uuid4());p=Principal('developer',frozenset([kb]));store.create_kb(p,kb,'cancel')
+    tasks=TaskService(store);task=tasks.submit(p,kb,'count',{},'cancel-1')
+    assert tasks.cancel(p,kb,task['id'])['status']=='cancelled'
+    assert tasks.cancel(p,kb,task['id'])['status']=='cancelled'
+    executions=[]
+    result=Worker(tasks,{'count':lambda payload,checkpoint:executions.append(1)}).run(p,kb,task['id'])
+    assert result['status']=='cancelled' and executions==[]
