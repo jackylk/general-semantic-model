@@ -80,3 +80,22 @@ def test_truncation_error_explains_output_budget_without_leaking_content(endpoin
     with pytest.raises(ProductError) as exc:LLM(url,'test','secret',allow_local=True).complete('json')
     assert exc.value.details[0]['reason']=='truncated'
     assert 'private partial source' not in str(exc.value.as_dict())
+
+
+def test_embedding_bounds_requests_and_preserves_all_long_input_chunks():
+    from http.server import HTTPServer,BaseHTTPRequestHandler
+    import math
+    received=[]
+    class Handler(BaseHTTPRequestHandler):
+        def do_POST(self):
+            body=json.loads(self.rfile.read(int(self.headers['Content-Length'])));texts=body['input'];received.append(texts)
+            self.send_response(200);self.end_headers();self.wfile.write(json.dumps({'data':[{'index':i,'embedding':[float(len(t)),1.]} for i,t in enumerate(texts)]}).encode())
+        def log_message(self,*args):pass
+    server=HTTPServer(('127.0.0.1',0),Handler);thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
+    try:
+        result=Embedding(f'http://127.0.0.1:{server.server_port}','test',dimensions=2,batch_size=2,max_text_chars=8,max_batch_chars=12).embed(['abcdefghijklmnopqrst','xy','z'])
+        assert len(result)==3 and result[1:]==[[2.,1.],[1.,1.]]
+        assert math.isclose(sum(v*v for v in result[0]),1.)
+        assert ''.join(t for batch in received for t in batch)=='abcdefghijklmnopqrstxyz'
+        assert all(len(batch)<=2 and sum(map(len,batch))<=12 and max(map(len,batch))<=8 for batch in received)
+    finally:server.shutdown();thread.join()
