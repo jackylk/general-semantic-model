@@ -209,3 +209,23 @@ def test_decimal_identity_is_canonicalized_and_rejected_repair_is_excluded(build
     one[0]['identity']['serial']='1.00'
     second=b.ingest(p,kb,dv,one)
     assert first['objects']['a']==second['objects']['a']
+
+
+def test_malformed_evidence_structure_is_repaired_instead_of_internal_error(build_env,tmp_path):
+    from gsm.application import Application
+    from gsm.adapters.llm import Completion
+    from gsm.credentials import write_credentials
+    store,b,review,p,kb,dv,block=build_env
+    profile=tmp_path/'profile.json';write_credentials(profile,'developer',[kb]);app=Application(profile);app.store=store;app.build=b
+    class Model:
+        n=0
+        def complete(self,*args,**kwargs):
+            self.n+=1;data=candidates(block)
+            if self.n==1:data[0]['evidence']={'block_id':{'bad':'shape'},'quote':'bad'}
+            else:
+                for item in data:
+                    for e in item['evidence']:e['block_id']='B0001'
+            return Completion({'candidates':data},'test',{'total_tokens':10})
+    result=app.extract_candidates(kb,dv,[{'block_id':block,'text':'test'}],Model())
+    assert result['result']['candidates'][-1]['status']=='verified'
+    assert result['attempts']==2

@@ -1,4 +1,5 @@
 """Persistent task execution; per-task advisory lock prevents duplicate workers."""
+import logging,traceback,json
 from psycopg.types.json import Jsonb
 from .errors import ProductError
 
@@ -20,6 +21,7 @@ class Worker:
                     conn.execute("UPDATE tasks SET status='succeeded',stage='complete',checkpoint=%s,updated_at=now() WHERE kb_id=%s AND id=%s",(Jsonb(result),kb_id,task_id))
             except ProductError as error:
                 self.tasks.fail(principal,kb_id,task_id,error.code,str(error),error.retryable)
-            except Exception:
+            except Exception as error:
+                logging.getLogger('gsm.worker').error(json.dumps({'event':'task_internal_error','task_id':task_id,'exception_type':type(error).__name__,'frames':[{'file':f.filename,'line':f.lineno,'function':f.name} for f in traceback.extract_tb(error.__traceback__)]}))
                 self.tasks.fail(principal,kb_id,task_id,'INTERNAL_ERROR','任务内部错误，请检查服务端受控诊断',False)
             return self.tasks.get(principal,kb_id,task_id)

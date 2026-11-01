@@ -1,5 +1,6 @@
 """Service composition used by CLI and MCP; no industry-specific behavior."""
 import json,os,tempfile
+from pydantic import ValidationError
 from pathlib import Path
 from .auth import Principal
 from .store import Store
@@ -52,18 +53,41 @@ class Application:
 
     def extract_candidates(self,kb_id,domain_id,blocks,llm):
         domain=self.build.get_domain(self.principal,kb_id,domain_id)
-        prompt={'task':'抽取语义候选，返回 JSON 对象 {"candidates":[]}。先列 object，再列 assertion/relation/event/rule。local_id 用于批次内引用；identity 只含领域身份属性。evidence 是输入块的 block_id 和逐字 quote。quantity 必须是 {"value":"10.25","unit":"W"}，不能只返回数字。decimal 用十进制字符串。缺失条件不得猜测。',
-            'domain':domain.model_dump(mode='json'),'candidate_schema':Candidate.model_json_schema(),'untrusted_source_blocks':blocks}
-        allowed={b['block_id'] for b in blocks};usage={};attempts=[]
+        aliases={f'B{i+1:04d}':block['block_id'] for i,block in enumerate(blocks)}
+        visible=[{**block,'block_id':f'B{i+1:04d}'} for i,block in enumerate(blocks)]
+        schema=Candidate.model_json_schema()
+        schema['$defs']['EvidenceInput']['properties']['block_id']['enum']=list(aliases)
+        prompt={'task':'抽取语义候选，返回 JSON 对象 {"candidates":[]}。先列 object，再列 assertion/relation/event/rule。local_id 用于批次内引用；identity 只含领域身份属性。evidence 必须是数组，每项是输入块 block_id 短标识和逐字 quote，不能写页码或编造块 ID。quantity 必须是 {"value":"10.25","unit":"W"}。decimal 用十进制字符串。缺失条件不得猜测。',
+            'domain':domain.model_dump(mode='json'),'candidate_schema':schema,'untrusted_source_blocks':visible}
+        allowed=set(aliases.values());usage={};attempts=[]
         for attempt in range(2):
             response=llm.complete(json.dumps(prompt,ensure_ascii=False))
             for key,value in response.usage.items():
                 if isinstance(value,int):usage[key]=usage.get(key,0)+value
-            raw=response.data.get('candidates')
-            if not isinstance(raw,list):raise ProductError('INVALID_EXTRACTION','模型未返回 candidates 列表')
-            if any(e.get('block_id') not in allowed for c in raw for e in c.get('evidence',[])):
-                raise ProductError('INVALID_EVIDENCE','模型引用了样本之外的块')
-            result=self.build.ingest(self.principal,kb_id,domain_id,raw)
+            raw=response.data.get('candidates');errors=[];normalized=[]
+            if not isinstance(raw,list):errors.append({'path':'candidates','reason':'必须为候选数组'})
+            else:
+                for index,candidate in enumerate(raw):
+                    try:typed=Candidate.model_validate(candidate)
+                    except ValidationError as error:
+                        errors.extend({'path':f'candidates.{index}.'+'.'.join(map(str,e['loc'])),'reason':e['msg']} for e in error.errors(include_input=False,include_url=False))
+                        continue
+                    item=typed.model_dump(mode='json')
+                    for evidence in item['evidence']:
+                        original=aliases.get(evidence['block_id'],evidence['block_id'])
+                        if original not in allowed:errors.append({'path':f'candidates.{index}.evidence.block_id','reason':'只能引用当前样本给出的 Bxxxx 标识'})
+                        evidence['block_id']=original
+                    normalized.append(item)
+            if errors:
+                attempts.append({'candidate_ids':[],'invalid_count':len(errors)})
+                if attempt==1:raise ProductError('INVALID_EXTRACTION','模型候选结构或证据标识仍不合法',errors)
+                prompt['repair']={'instruction':'修正结构和证据标识，重新返回完整候选数组，不得编造事实。','previous_candidates':raw,'errors':errors}
+                continue
+            if not normalized and attempt==0:
+                attempts.append({'candidate_ids':[],'invalid_count':0,'coverage':'empty'})
+                prompt['repair']={'instruction':'上次未返回候选。请再次核对样本与抽取目标；若确实无相关内容可返回空数组并说明 extraction_notes，不得编造。'}
+                continue
+            result=self.build.ingest(self.principal,kb_id,domain_id,normalized)
             invalid=[{'candidate':c['payload'],'issues':c['issues']} for c in result['candidates'] if any(i['fatal'] for i in c['issues'])]
             attempts.append({'candidate_ids':[c['id'] for c in result['candidates']],'invalid_count':len(invalid)})
             if not invalid:break
@@ -71,7 +95,7 @@ class Application:
                 from .review import ReviewService
                 ReviewService(self.store).decide(self.principal,kb_id,[c['id'] for c in result['candidates']],'reject','系统自动纠错替代本次尝试，非人工业务确认')
             prompt['repair']={'instruction':'按具体错误修正整个候选批次。不能补造证据或身份；资料无法确定的保留未决。','previous_candidates':raw,'errors':invalid}
-        return {'result':result,'usage':usage,'model':response.model,'attempts':len(attempts),'attempt_log':attempts}
+        return {'result':result,'usage':usage,'model':response.model,'attempts':len(attempts),'attempt_log':attempts,'coverage':'empty' if not result['candidates'] else 'candidates_returned'}
 
     def execute_task(self,kb_id,task_id):
         def extract(payload,checkpoint):
