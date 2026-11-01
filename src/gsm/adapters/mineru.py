@@ -25,7 +25,7 @@ class Parser:
             output=Path(temp)/'middle.json'
             try:
                 # Explicit local mode is mandatory; stdout/stderr may contain source text, so never log it.
-                subprocess.run([self.command,'parse',str(path),'--tier','flash','--disable-image-analysis','--format','middle_json','-o',str(output)],check=True,capture_output=True,timeout=self.timeout)
+                subprocess.run([self.command,'parse',str(path),'--tier','flash','--ocr-mode','txt','--disable-image-analysis','--format','middle_json','-o',str(output)],check=True,capture_output=True,timeout=self.timeout)
                 raw=json.loads(output.read_text())
             except FileNotFoundError:
                 raise ProductError('PARSER_UNAVAILABLE','未安装配置的本地 mineru-kit 命令') from None
@@ -33,7 +33,7 @@ class Parser:
                 raise ProductError('PARSER_TIMEOUT','本地文档解析超时',retryable=True) from None
             except (subprocess.CalledProcessError,ValueError,OSError):
                 raise ProductError('PARSE_FAILED','本地 MinerU 解析失败；原件保持不变') from None
-            return self.from_middle(raw,'mineru-local-flash')
+            return self.from_middle(raw,'mineru-local-flash-txt')
 
     @staticmethod
     def from_middle(raw,version):

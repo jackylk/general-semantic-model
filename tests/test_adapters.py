@@ -59,3 +59,17 @@ def test_mineru_inline_spans_are_text_not_python_lists():
     result=Parser.from_middle({'pages':[{'page_idx':3,'blocks':[{'type':'text','content':[{'type':'text','content':'补贴'},{'type':'text','content':'100元'}]}]}]},'v1')
     assert result.blocks[0]['text']=='补贴100元'
     assert result.blocks[0]['page']==4
+
+
+def test_local_flash_pdf_uses_native_text_mode_without_loading_ocr(tmp_path):
+    command=tmp_path/'mineru-kit'
+    command.write_text('''#!/usr/bin/env python3
+import sys,json
+from pathlib import Path
+args=sys.argv[1:]
+if '--ocr-mode' not in args or args[args.index('--ocr-mode')+1]!='txt':sys.exit(2)
+Path(args[args.index('-o')+1]).write_text(json.dumps({'pages':[{'page_idx':0,'blocks':[{'type':'text','content':'native text'}]}]}))
+''')
+    command.chmod(0o755);source=tmp_path/'source.pdf';source.write_bytes(b'%PDF-test')
+    result=Parser(command=str(command)).parse(source)
+    assert result.blocks[0]['text']=='native text'
