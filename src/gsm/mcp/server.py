@@ -3,6 +3,7 @@ from pathlib import Path
 import psycopg
 from mcp.server.fastmcp import FastMCP
 from gsm.application import Application
+from gsm.onboarding import OnboardingState
 from gsm.domain import validate_domain as validate
 from gsm.releases import ReleaseService
 from gsm.search import QueryService
@@ -83,7 +84,7 @@ def create_server(app:Application):
         """创建知识库的首个入口：发现指南、定义 Schema 和完整示例。"""
         return {'entry_phrase':'我要开始创建知识库','allowed_kb_ids':sorted(p.kb_ids),'document_inbox':str(store.settings.source_root) if store.settings.source_root else None,'source_policy':'ask_user_for_documents','source_guidance':'尚未预选用户资料。先请用户提供知识文档、上传文件或说明所在目录；用户选择后，由开发者 Codex 自动将选定样本复制到 document_inbox，再登记相对路径。不要把收件目录当作已有用户资料，也不要根据它猜测领域。','workflow':['了解用途和问题','选择资料样本','自动分析并建议领域','用例解释与少量业务选择','提交校验并预览抽取','检查证据冲突并修正','构建验收后发布'],
         'guide':Path('docs/developer-guide.md').read_text() if Path('docs/developer-guide.md').exists() else Path('docs/reference/domain.md').read_text(),
-        'domain_schema':json.loads(Path('docs/reference/domain.schema.json').read_text()),'example':Path('examples/minimal/domain.yaml').read_text()}
+        'onboarding_schema':OnboardingState.model_json_schema(),'domain_schema':json.loads(Path('docs/reference/domain.schema.json').read_text()),'example':Path('examples/minimal/domain.yaml').read_text()}
 
     @tool
     def create_kb(kb_id:str,name:str)->dict:

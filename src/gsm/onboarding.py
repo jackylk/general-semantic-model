@@ -10,7 +10,7 @@ class OnboardingState(StrictModel):
     questions:list[str]=Field(default_factory=list)
     source_version_ids:list[str]=Field(default_factory=list)
     choices:dict[str,str]=Field(default_factory=dict)
-    unresolved:list[dict]=Field(default_factory=list)
+    unresolved:list[str|dict]=Field(default_factory=list)
     domain_version_id:str|None=None
     task_id:str|None=None
     release_id:str|None=None
@@ -41,7 +41,7 @@ class OnboardingService:
             # Preserve earlier confirmed choices unless that exact choice is explicitly revised.
             merged['choices']={**row[0].get('choices',{}),**patch.get('choices',{})}
             try:state=OnboardingState.model_validate(merged).model_dump(mode='json')
-            except ValidationError:raise ProductError('INVALID_STATE','引导状态不符合公开格式') from None
+            except ValidationError as exc:raise ProductError('INVALID_STATE','引导状态不符合公开格式',[{'path':'.'.join(map(str,e['loc'])),'reason':e['msg']} for e in exc.errors(include_input=False,include_url=False)]) from None
             if len(json.dumps(state,ensure_ascii=False))>100000:raise ProductError('STATE_TOO_LARGE','引导状态超过限制')
             conn.execute('UPDATE onboarding SET state=%s,revision=revision+1,updated_at=now() WHERE kb_id=%s',(Jsonb(state),kb_id))
         return self.get(principal,kb_id)
