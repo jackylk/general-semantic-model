@@ -110,3 +110,21 @@ def test_llm_per_call_output_cap_is_sent_to_provider(endpoint,monkeypatch):
     model=LLM('https://example.invalid','test','dummy',max_tokens=16384)
     model.complete('x',max_tokens=300);model.complete('x',max_tokens=20000)
     assert sent==[300,16384]
+
+
+def test_local_llm_factory_never_reads_cloud_credentials(tmp_path, endpoint):
+    url,h=endpoint
+    secret=tmp_path/'cloud.env';secret.write_text('DEEPSEEK_API_KEY=cloud-secret-must-stay-local\n')
+    model=LLM.from_env_file(secret,base_url=url,model='local-qwen',allow_local=True)
+    assert model._api_key=='local-only'
+    assert model.base_url==url
+    assert model.model=='local-qwen'
+    missing=LLM.from_env_file(tmp_path/'missing.env',base_url=url,model='local-qwen',allow_local=True)
+    assert missing._api_key=='local-only'
+
+
+@pytest.mark.parametrize('url',['http://example.com/v1','https://example.com/v1'])
+def test_local_llm_factory_rejects_remote_hosts(tmp_path,url):
+    with pytest.raises(ProductError) as exc:
+        LLM.from_env_file(tmp_path/'missing.env',base_url=url,model='local',allow_local=True)
+    assert exc.value.code=='INVALID_CONFIG'

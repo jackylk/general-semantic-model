@@ -27,6 +27,11 @@ class LLM:
 
     @classmethod
     def from_env_file(cls,path,base_url='https://api.deepseek.com',model='deepseek-flash',**kwargs):
+        if kwargs.get('allow_local'):
+            parsed=urlsplit(base_url)
+            if parsed.scheme not in ('http','https') or parsed.hostname not in ('127.0.0.1','localhost') or parsed.username or parsed.password:
+                raise ProductError('INVALID_CONFIG','本地 LLM 模式只允许回环地址')
+            return cls(base_url,model,'local-only',**kwargs)
         config=dotenv_values(path)
         return cls(base_url,model,config.get('DEEPSEEK_API_KEY',''),**kwargs)
 
