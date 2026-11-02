@@ -21,3 +21,28 @@ def test_timing_logs_nested_phases_without_capturing_content_or_secrets(tmp_path
     except ProductError:pass
     row=json.loads(path.read_text().splitlines()[-1]);assert row['error_code']=='TEST_ERROR'
     assert 'private failure message' not in path.read_text()
+
+
+def test_retrieval_context_keeps_original_once_and_retains_conditions():
+    from gsm.retrieval import model_view
+    text='Long original evidence with explicit conditions.'
+    record={'payload':{'value':'10','conditions':{'region':'X'},'evidence':[{'quote':text}]},'evidence_ids':['e']}
+    assert model_view(record)['payload']['conditions']=={'region':'X'}
+    assert 'evidence' not in model_view(record)['payload']
+    evidence={'id':'e','text':text,'quote':text,'locator':{'page':1,'content':[{'content':text}],'bbox':[1,2,3,4]}}
+    view=model_view(evidence)
+    assert json.dumps(view).count(text)==1 and view['locator']['page']==1
+    assert view['locator']['bbox']==[1,2,3,4]
+
+
+def test_answer_review_deduplicates_long_originals_without_crossing_sources():
+    from gsm.retrieval import review_evidence
+    text='original text '*1000
+    base={'text':text,'quote':text[:-1],'fingerprint':'same','parse_version_id':'p','source_version_id':'s','start_offset':0,'end_offset':len(text)-1,'source':{'filename':'source.txt'}}
+    evidence=[{**base,'id':str(i)} for i in range(8)]
+    compact=review_evidence(evidence)
+    assert len(compact['original_blocks'])==1 and len(compact['evidence'])==8
+    assert compact['original_blocks'][0]['text']==text
+    assert len(json.dumps(compact))<len(text)*2
+    other={**base,'id':'other','source_version_id':'other-source'}
+    assert len(review_evidence(evidence+[other])['original_blocks'])==2

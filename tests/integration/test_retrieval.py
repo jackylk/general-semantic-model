@@ -47,6 +47,7 @@ def test_retrieval_agent_uses_tools_and_rejects_fabricated_citations(build_env):
     class ScriptedModel:
         def __init__(self): self.calls=0
         def complete(self,prompt,system='',**kwargs):
+            if system.startswith('证据一致性核验'):return Completion({'supported':True,'reasons':[]},'test',{})
             self.calls+=1
             if self.calls==1:return Completion({'action':'query_records','args':{'kind':'assertion'}},'test',{'total_tokens':5})
             if self.calls==2:return Completion({'action':'read_evidence','args':{'evidence_id':evidence}},'test',{'total_tokens':5})
@@ -67,6 +68,7 @@ def test_multi_round_evidence_context_has_bounded_budget_for_real_documents(buil
     class Model:
         def __init__(self):self.n=0
         def complete(self,*args,**kwargs):
+            if kwargs.get('system','').startswith('证据一致性核验'):return Completion({'supported':True,'reasons':[]},'test',{})
             self.n+=1
             if self.n==1:return Completion({'action':'query_records','args':{'kind':'assertion'}},'test',{'total_tokens':6000})
             if self.n==2:return Completion({'action':'read_evidence','args':{'evidence_id':evidence}},'test',{'total_tokens':7000})
@@ -94,3 +96,28 @@ def test_search_keeps_hits_after_first_200_records(build_env):
     target=max(records,key=lambda r:r['id'])
     hits=QueryService(store).search(p,kb,rel,target['payload']['name'],use_vector=False)
     assert any(r['id']==target['id'] for r in hits)
+
+
+def test_retrieval_uses_published_vocabulary_batches_evidence_and_rejects_bad_answer(build_env):
+    import json
+    from gsm.retrieval import RetrievalService
+    from gsm.adapters.llm import Completion
+    store,b,review,p,kb,dv,block=build_env
+    _,rel=publish(build_env);eid=QueryService(store).records(p,kb,rel,kind='assertion')[0]['evidence_ids'][0]
+    class Model:
+        def __init__(self):self.n=0;self.reviewed=False
+        def complete(self,prompt,system='',**kwargs):
+            data=json.loads(prompt)
+            if system.startswith('证据一致性核验'):
+                self.reviewed=True
+                assert data['original_blocks'][0]['source']['filename']=='a.txt'
+                assert '10.25' in data['original_blocks'][0]['text']
+                return Completion({'supported':False,'reasons':['数值或主体不受所引原文支持']},'test',{})
+            assert any(x['id']=='power' for x in data['domain']['properties'])
+            self.n+=1
+            if self.n==1:return Completion({'action':'read_evidence_batch','args':{'evidence_ids':[eid]}},'test',{})
+            return Completion({'action':'finish','status':'supported','answer':'另一个设备功率100 W','citations':[eid]},'test',{})
+    model=Model();result=RetrievalService(store,model,max_rounds=2).retrieve(p,kb,rel,'设备A的功率')
+    assert model.reviewed and result['status']=='insufficient'
+    assert result['support_check']['supported'] is False
+    assert '100 W' not in result['answer']
