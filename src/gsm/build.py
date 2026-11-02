@@ -1,4 +1,4 @@
-from gsm.observability import timed
+from gsm.observability import timed,phase
 from typing import Any
 from hashlib import sha256
 from pathlib import Path
@@ -263,8 +263,10 @@ class BuildService:
             source_blocks=conn.execute('''SELECT DISTINCT b.id,b.text FROM source_blocks b WHERE b.kb_id=%s AND b.parse_version_id IN (
                 SELECT b2.parse_version_id FROM evidence_links e JOIN source_blocks b2 ON b2.kb_id=e.kb_id AND b2.id=e.block_id
                 WHERE e.kb_id=%s AND e.record_id=ANY(%s::uuid[]))''',(kb_id,kb_id,record_ids)).fetchall()
-        vectors=Embedding().embed(texts) if embed else [None]*len(texts)
-        source_vectors=Embedding().embed([r[1] for r in source_blocks]) if embed else [None]*len(source_blocks)
+        with phase('build.semantic_embedding'):
+            vectors=Embedding().embed(texts) if embed else [None]*len(texts)
+        with phase('build.source_embedding'):
+            source_vectors=Embedding().embed([r[1] for r in source_blocks]) if embed else [None]*len(source_blocks)
         build_id=ReleaseService(self.store).stage(principal,kb_id,record_ids,ready=False)
         with self.store.transaction(principal,kb_id) as conn:
             for row,text,vector in zip(rows,texts,vectors):
@@ -274,6 +276,7 @@ class BuildService:
                 encoded='['+','.join(map(str,vector))+']' if vector is not None else None
                 conn.execute("INSERT INTO source_search_documents(kb_id,build_id,block_id,text,tokens,embedding) VALUES(%s,%s,%s,%s,to_tsvector('simple',%s),%s::vector)",(kb_id,build_id,row[0],row[1],tokenize(row[1]),encoded))
             from .wiki import render_wiki
-            wiki=render_wiki(rows,domain,citations)
+            with phase('build.wiki'):
+                wiki=render_wiki(rows,domain,citations)
             conn.execute('UPDATE builds SET ready=true,manifest=%s WHERE kb_id=%s AND id=%s',(Jsonb({'domain_version_id':domain_version_id,'wiki':wiki,'vector_ready':embed,'baseline_block_ids':[str(r[0]) for r in source_blocks]}),kb_id,build_id))
         return build_id
