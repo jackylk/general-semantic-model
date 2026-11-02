@@ -247,3 +247,15 @@ def test_extraction_retries_invalid_json_with_bounded_attempts(build_env):
     bad=Model(True)
     with pytest.raises(ProductError) as exc:app.extract_candidates(kb,dv,[{'block_id':block,'text':'test'}],bad)
     assert bad.calls==2 and exc.value.retryable
+
+
+def test_build_preview_filters_conditions_before_publish_without_releasing(build_env):
+    store,b,review,p,kb,dv,block=build_env
+    result=b.ingest(p,kb,dv,candidates(block));bid=b.finish(p,kb,dv,[r['id'] for r in result['candidates']],embed=False)
+    preview=b.preview(p,kb,bid,conditions={'temperature':'20'})
+    assert preview['matching_count']==1 and preview['records'][0]['payload']['conditions']=={'temperature':'20'}
+    assert b.preview(p,kb,bid,conditions={'temperature':'0'})['records']==[]
+    assert ReleaseService(store).current(p,kb) is None
+    reader=Principal('consumer',frozenset([kb]))
+    with pytest.raises(ProductError):b.preview(reader,kb,bid)
+    with pytest.raises(ProductError):b.preview(p,kb,str(uuid4()))

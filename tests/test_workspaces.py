@@ -11,6 +11,8 @@ def test_generated_launcher_passes_role_config_without_global_edits(tmp_path):
     completed=subprocess.run(['python3',str(runner),'hello world'],env={**os.environ,'PATH':str(tmp_path)+':'+os.environ['PATH']},capture_output=True,text=True,check=True)
     args=json.loads(completed.stdout)
     assert 'hello world'==args[-1]
+    assert args[args.index('--sandbox')+1]=='workspace-write'
+    assert 'sandbox_workspace_write.writable_roots=[]' in args
     assert any(a.startswith('mcp_servers.gsm_developer.command=') for a in args)
     assert not any('gsm_consumer' in a for a in args)
 

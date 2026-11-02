@@ -200,6 +200,17 @@ class BuildService:
             AND EXISTS(SELECT 1 FROM evidence_links e JOIN source_blocks b ON b.kb_id=e.kb_id AND b.id=e.block_id JOIN parse_versions p ON p.kb_id=b.kb_id AND p.id=b.parse_version_id
                 WHERE e.kb_id=r.kb_id AND e.record_id=r.id AND NOT EXISTS(SELECT 1 FROM source_withdrawals w WHERE w.kb_id=p.kb_id AND w.source_version_id=p.source_version_id))""",(kb_id,kind,domain_version_id)).fetchall()
 
+    def preview(self,principal,kb_id,build_id,kind=None,conditions=None,limit=100,offset=0):
+        principal.require(kb_id,write=True)
+        if not 1<=limit<=200 or offset<0:raise ProductError('INVALID_LIMIT','limit 1–200，offset 不得为负数')
+        with self.store.transaction(principal,kb_id) as conn:
+            build=conn.execute('SELECT record_ids,ready,manifest FROM builds WHERE kb_id=%s AND id=%s',(kb_id,build_id)).fetchone()
+            if not build:raise ProductError('NOT_FOUND','构建不存在或无权限')
+            if not build[1]:raise ProductError('BUILD_NOT_READY','构建尚未就绪')
+            rows=conn.execute('SELECT id,kind,payload FROM records WHERE kb_id=%s AND id=ANY(%s::uuid[]) ORDER BY id',(kb_id,build[0])).fetchall()
+        records=[{'id':str(rid),'kind':rkind,'payload':payload} for rid,rkind,payload in rows if (not kind or kind==rkind) and (not conditions or all(payload.get('conditions',{}).get(k)==v for k,v in conditions.items()))]
+        return {'build_id':build_id,'preview_only':True,'record_ids':[str(rid) for rid in build[0]],'matching_count':len(records),'records':records[offset:offset+limit],'offset':offset,'manifest':build[2]}
+
     def finish(self,principal,kb_id,domain_version_id,record_ids,embed=True):
         from .search import tokenize
         from .adapters.embedding import Embedding
