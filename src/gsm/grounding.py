@@ -51,4 +51,4 @@ def grounded(value,definition,text):
         return all(grounded(v,item,text) for v in value)
     if typ=='interval':return str(value.get('start')) in text and str(value.get('end')) in text
     if typ=='boolean':return ('true' if value else 'false') in text.lower()
-    return str(value) in text
+    return re.sub(r'\s+',' ',str(value)).strip() in re.sub(r'\s+',' ',text)

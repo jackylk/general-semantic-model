@@ -19,3 +19,12 @@ def test_voltage_does_not_match_va_or_cross_table_rows():
     definition=voltage();value={'value':'100','unit':'V'}
     assert not grounded(value,definition,'rating 100VA')
     assert not grounded(value,definition,'<table><tr><td>unrelated count</td><td>100</td></tr><tr><td>V</td><td>10</td></tr></table>')
+
+
+def test_text_condition_allows_layout_whitespace_without_crossing_table_rows():
+    from types import SimpleNamespace
+    definition=SimpleNamespace(value_type='string')
+    phrase='time or mileage, whichever comes first'
+    assert grounded(phrase,definition,'Warranty period (time or mileage, whichever\ncomes first)')
+    assert not grounded(phrase,definition,'<table><tr><td>time or mileage, whichever</td></tr><tr><td>comes first</td></tr></table>')
+    assert not grounded(phrase,definition,'time or mileage, whichever comes last')
