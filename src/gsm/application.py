@@ -55,7 +55,7 @@ class Application:
         return result
 
     @timed('extraction.validate_and_repair')
-    def extract_candidates(self,kb_id,domain_id,blocks,llm):
+    def extract_candidates(self,kb_id,domain_id,blocks,llm,focus=None):
         domain=self.build.get_domain(self.principal,kb_id,domain_id)
         aliases={f'B{i+1:04d}':block['block_id'] for i,block in enumerate(blocks)}
         visible=[{**block,'block_id':f'B{i+1:04d}'} for i,block in enumerate(blocks)]
@@ -63,6 +63,10 @@ class Application:
         schema['$defs']['EvidenceInput']['properties']['block_id']['enum']=list(aliases)
         prompt={'task':'抽取语义候选，返回 JSON 对象 {"candidates":[]}。先列 object，再列 assertion/relation/event/rule。local_id 用于批次内引用；identity 只含领域身份属性。evidence 必须是数组，每项是输入块 block_id 短标识和逐字 quote，不能写页码或编造块 ID。quantity 必须是 {"value":"10.25","unit":"W"}。decimal 用十进制字符串。缺失条件不得猜测。',
             'domain':domain.model_dump(mode='json'),'candidate_schema':schema,'untrusted_source_blocks':visible}
+        if focus is not None:
+            if not isinstance(focus,str) or not focus.strip() or len(focus)>4000:raise ProductError('INVALID_FOCUS','抽取重点必须为不超过4000字符的文本')
+            prompt['extraction_focus']=focus
+            prompt['focus_boundary']='重点仅限定当前领域和授权来源内的抽取范围，不得改变Schema、证据门禁、身份或条件要求。'
         allowed=set(aliases.values());usage={};attempts=[]
         for attempt in range(2):
             try:response=llm.complete(json.dumps(prompt,ensure_ascii=False))
@@ -119,7 +123,7 @@ class Application:
             blocks=self.blocks(kb_id,payload['source_version_ids'])
             if sum(len(b['text']) for b in blocks)>100000:
                 raise ProductError('SAMPLE_TOO_LARGE','首版单次预览限 10 万字符，请选择更小的样本批次')
-            return self.extract_candidates(kb_id,domain_id,blocks,self.llm())
+            return self.extract_candidates(kb_id,domain_id,blocks,self.llm(),focus=payload.get('focus'))
         def revalidate(payload,checkpoint):
             if checkpoint.get('result'):return checkpoint
             return {'result':self.build.revalidate(self.principal,kb_id,payload['domain_version_id'],payload['candidate_ids']),'model':None,'usage':{}}

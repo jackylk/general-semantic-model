@@ -276,3 +276,18 @@ def test_revalidation_uses_existing_payload_without_llm_and_keeps_original(build
     review.decide(p,kb,[ids[0]],'reject','business decision')
     with pytest.raises(ProductError):b.revalidate(p,kb,dv,ids)
     with pytest.raises(ProductError):b.revalidate(Principal('consumer',frozenset([kb])),kb,dv,ids)
+
+
+def test_focused_extraction_keeps_fixed_domain_and_routes_only_data_instructions(build_env):
+    import json
+    from gsm.application import Application
+    from gsm.adapters.llm import Completion
+    store,b,review,p,kb,dv,block=build_env
+    app=object.__new__(Application);app.store=store;app.principal=p;app.build=b
+    before=b.get_domain(p,kb,dv).model_dump(mode='json')
+    class Model:
+        def complete(self,prompt,**kwargs):
+            data=json.loads(prompt);assert data['extraction_focus']=='Inspect missing connectivity using existing declared types.'
+            return Completion({'candidates':candidates(block)},'test',{})
+    result=app.extract_candidates(kb,dv,[{'block_id':block,'text':'test'}],Model(),focus='Inspect missing connectivity using existing declared types.')
+    assert result['result']['candidates'] and b.get_domain(p,kb,dv).model_dump(mode='json')==before
