@@ -17,6 +17,8 @@ def render_wiki(rows,domain,citations):
         else:sentence=f"{name} · {p.get('rule',{}).get('name','规则')}：{p.get('rule',{}).get('conclusion','')}"
         if p.get('conditions'):sentence+='；条件：'+json.dumps(p['conditions'],ensure_ascii=False)
         if p.get('provenance') in ('inference','calculation'):sentence+='；类别：'+p['provenance']
+        quotes=list(dict.fromkeys(e.get('quote','') for e in p.get('evidence',[]) if e.get('quote')))
+        if quotes:sentence+='；原文摘录：'+json.dumps(quotes,ensure_ascii=False)
         refs=' '.join(f'[证据 {e}]({e})' for e in support.get(str(rid),[]))
         lines.append(f'- {sentence}。{refs}（记录 {rid}）')
     return {'text':'\n\n'.join(lines),'citations':citations}
