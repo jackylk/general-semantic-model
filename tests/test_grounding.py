@@ -38,3 +38,15 @@ def test_quote_newline_mapping_preserves_actual_source_offsets():
     assert locate_quote(text,'Warranty period whichever comes first.') is None
     reverse='x:A\r\nB!';span=locate_quote(reverse,'A\nB')
     assert reverse[span[0]:span[1]]=='A\r\nB'
+
+
+def test_structured_row_units_must_match_the_same_column_header():
+    from decimal import Decimal
+    import json
+    from gsm.grounding import quantities
+    row=json.dumps({'headers':[['Temperature (C)','Power (W)']],'row':['30','12.50']})
+    assert quantities(row,'W')=={Decimal('12.50')}
+    assert quantities(row,'C')=={Decimal('30')}
+    assert not quantities(row,'V')
+    qualifier=json.dumps({'headers':[['Power (maximum)']],'row':['12.50']})
+    assert not quantities(qualifier,'W')

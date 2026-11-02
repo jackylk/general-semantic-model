@@ -20,7 +20,7 @@ def build_env(tmp_path):
     s=Settings.load();s.source_root=tmp_path;s.file_root=tmp_path/'blobs'
     store=Store(s);store.migrate();kb=str(uuid4());p=Principal('developer',frozenset([kb]));store.create_kb(p,kb,'build')
     src=SourceService(store);(tmp_path/'a.txt').write_text('设备 A 序号 001。设备 B 序号 002。A 连接 B。20℃时 A 功率 10.25 W。')
-    v=src.import_file(p,kb,'a.txt');parsed=src.save_parse(p,kb,v['id'],'text',[{'text':(tmp_path/'a.txt').read_text(),'page':1}])
+    v=src.import_file(p,kb,'a.txt');parsed=src.save_parse(p,kb,v['id'],'plain-text-v1',[{'text':(tmp_path/'a.txt').read_text(),'page':1}])
     build=BuildService(store);build.migrate();dv=build.submit_domain(p,kb,DOMAIN)
     return store,build,ReviewService(store),p,kb,dv,parsed['blocks'][0]['id']
 

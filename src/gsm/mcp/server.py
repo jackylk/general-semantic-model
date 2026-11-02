@@ -117,6 +117,12 @@ def create_server(app:Application):
         return app.sources.import_file(p,kb_id,relative_path)
 
     @tool
+    def inspect_source_parse(kb_id:str,source_version_id:str,include_units:bool=False)->dict:
+        """解析授权来源并报告逐页覆盖、未识别媒体和结构；不代表语义完整性。仅建库者可用。"""
+        parse_id=app.parse_source(kb_id,source_version_id)
+        return app.sources.parse_report(p,kb_id,parse_id,include_units)
+
+    @tool
     def withdraw_source(kb_id:str,source_version_id:str)->dict:
         app.sources.withdraw(p,kb_id,source_version_id);return {'status':'withdrawn_for_future_builds','source_version_id':source_version_id}
 

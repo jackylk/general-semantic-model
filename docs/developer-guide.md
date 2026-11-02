@@ -44,3 +44,13 @@
 以docs/shared-kb-workflow.md为准：产品init-kb已创建空知识库，第二、第三窗口共用根目录。建库优先start_pipeline处理完整来源集合，不由客户端逐条填事实或手写Wiki。它自动分批、持久化抽取结果、做模型语义支持复核并构建多页Wiki；不支持/需确认记录保留为排除项，不自动确认。get_task_status用于轻量轮询，get_task只在需要完整结果时调用。获得build_id后preview_build检查，获授权再publish。产品负责releases/、wiki/和CURRENT.json文件，不在客户端复制输出冒充产品产物。
 
 大资料全量构建前，先调用preview_extraction(sample_chars=12000)做来源均衡、完整块的限额预览；这不是全文覆盖或验收通过。检查合格候选、身份、条件及证据错误，再修正领域定义。不能为让预览通过而删除真实必需条件或编造条件值。连续两批产生至少20条候选却没有任何获支持记录时，start_pipeline会以PIPELINE_NO_SUPPORTED_PROGRESS提前停止并保留检查点，避免盲目消耗Token；应回到限额预览和领域/证据诊断，不反复重试同一错误。
+
+## PDF 解析覆盖与表格证据
+
+建库者可调用 `inspect_source_parse(kb_id, source_version_id, include_units=False)`，获取指定来源的解析版本及逐页覆盖报告。`include_units=True` 返回文字、表格、图片、公式等文档单元和未识别状态；该工具只开放给 producer。第三窗口通过已发布 manifest 中的 `document_coverage` 和 Wiki 提示看到覆盖限制，不读取建库者的未发布单元。
+
+当前 PDF 路径使用本地 MinerU 数字文字模式，并用同一本地运行环境内的 pypdf 补充布局文字；不上传原文。可恢复规则布局表格的候选行和部分空公式区域的可读字符。推断表格保留 `native_layout_inference` 与 `requires_review` 标记。上下标以 `^{...}`、`_{...}` 显式表达。表格行引用包含完整表头、行和邻近上下文；单位核验只匹配本列明确写出的领域单位，不把任意括号内容猜成单位。
+
+这不等于完整 OCR、视觉模型或数学求值。纯图片页、未识别公式和未确认布局仍在报告中标为缺口。表格行超过批次预算时返回 `STRUCTURED_UNIT_TOO_LARGE`，需增加预算或修正结构，不能截断。`table_row_coverage` 只统计最终构建记录引用了哪些行，不宣称行内所有事实或条件都已提取。
+
+更新产品后由第一窗口执行 `.venv/bin/python -m gsm.cli migrate`，应用 009 增量迁移（仅给 `parse_versions` 增加 `document_units`、`coverage` 两列，不新增行业表或图类型）。旧解析与发布版保持不变，新 PDF 解析按当前 parser_version 建立独立版本。已启动服务需按原流程重新启动才能使用新代码；旧任务遇到产品版本变化应保留并创建新任务，不能混用旧 checkpoint。

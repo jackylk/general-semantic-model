@@ -38,6 +38,8 @@ def test_external_mcp_contracts_and_role_boundary(tmp_path):
                 shutil.copy2(supplied,inbox/supplied.name)
                 registered=unpack(await session.call_tool('register_source',{'kb_id':kb,'relative_path':supplied.name}))
                 assert registered['byte_count']==len('用户主动提供的知识文档'.encode())
+                inspected=unpack(await session.call_tool('inspect_source_parse',{'kb_id':kb,'source_version_id':registered['id']}))
+                assert inspected['parser_version']=='plain-text-v1' and 'units' not in inspected
                 denied_path=unpack(await session.call_tool('register_source',{'kb_id':kb,'relative_path':str(supplied)}))
                 assert denied_path['error']['code']=='INVALID_SOURCE'
                 bad=unpack(await session.call_tool('validate_domain',{'definition':{'sql':'SELECT secret'}}))
@@ -49,7 +51,7 @@ def test_external_mcp_contracts_and_role_boundary(tmp_path):
             async with ClientSession(read,write) as session:
                 await session.initialize()
                 names={t.name for t in (await session.list_tools()).tools}
-                assert 'publish' not in names and 'register_source' not in names and 'preview_build' not in names and 'revalidate_candidates' not in names
+                assert 'inspect_source_parse' not in names and 'publish' not in names and 'register_source' not in names and 'preview_build' not in names and 'revalidate_candidates' not in names
                 denied=await session.call_tool('publish',{'kb_id':kb,'build_id':str(uuid4())})
                 assert denied.isError
                 result=unpack(await session.call_tool('describe_kb',{'kb_id':kb}))

@@ -52,6 +52,8 @@ def test_pipeline_retry_reuses_extracted_batch_after_review_failure(build_env,mo
     app=object.__new__(Application);app.store=store;app.build=b;app.principal=p;app.workspace_root=None
     from gsm.tasks import TaskService
     app.tasks=TaskService(store)
+    from gsm.sources import SourceService
+    app.sources=SourceService(store)
     with store.transaction(p,kb) as conn:source=str(conn.execute('SELECT source_version_id FROM parse_versions WHERE kb_id=%s',(kb,)).fetchone()[0])
     counts={'extract':0,'review':0}
     def extraction(*args,**kwargs):

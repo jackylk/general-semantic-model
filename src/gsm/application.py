@@ -60,16 +60,17 @@ class Application:
     def parse_source(self,kb_id,source_version_id):
         self.principal.require(kb_id,write=True)
         with self.store.transaction(self.principal,kb_id) as conn:
-            existing=conn.execute('SELECT id FROM parse_versions WHERE kb_id=%s AND source_version_id=%s ORDER BY id LIMIT 1',(kb_id,source_version_id)).fetchone()
-            if existing:return str(existing[0])
             row=conn.execute('SELECT sha256,filename FROM source_versions WHERE kb_id=%s AND id=%s',(kb_id,source_version_id)).fetchone()
             if not row:raise ProductError('NOT_FOUND','来源版本不存在或无权限')
+            expected='plain-text-v1' if Path(row[1]).suffix.lower() in ('.txt','.md') else Parser.PDF_VERSION
+            existing=conn.execute('SELECT id FROM parse_versions WHERE kb_id=%s AND source_version_id=%s AND parser_version=%s ORDER BY id LIMIT 1',(kb_id,source_version_id,expected)).fetchone()
+            if existing:return str(existing[0])
         blob=self.store.settings.file_root/kb_id/row[0]
         with tempfile.TemporaryDirectory(prefix='gsm-source-') as tmp:
             path=Path(tmp)/Path(row[1]).name;path.write_bytes(blob.read_bytes())
             command=os.environ.get('GSM_MINERU_COMMAND',str(Path.cwd()/'runtime/mineru/bin/mineru-kit'))
             parsed=Parser(command=command).parse(path)
-        return self.sources.save_parse(self.principal,kb_id,source_version_id,parsed.parser_version,parsed.blocks,raw=parsed.raw)['id']
+        return self.sources.save_parse(self.principal,kb_id,source_version_id,parsed.parser_version,parsed.blocks,raw=parsed.raw,units=parsed.units,coverage=parsed.coverage)['id']
 
     @timed('source.load_blocks')
     def blocks(self,kb_id,source_version_ids):
@@ -88,14 +89,16 @@ class Application:
         from .source_context import source_context
         visible=[{**source_context(block),'block_id':f'B{i+1:04d}'} for i,block in enumerate(blocks)]
         schema=Candidate.model_json_schema()
+        schema['properties']['conditions']={'type':'object','properties':{c.id:{'description':f'{c.name or c.id}; value_type={c.value_type}'} for c in domain.conditions},'additionalProperties':False}
         schema['$defs']['EvidenceInput']['properties']['block_id']['enum']=list(aliases)
         prompt={'task':'抽取语义候选，返回 JSON 对象 {"candidates":[]}。先列 object，再列 assertion/relation/event/rule。local_id 用于批次内引用；identity 只含领域身份属性。evidence 必须是数组，每项是输入块 block_id 短标识和逐字 quote，不能写页码或编造块 ID。quantity 必须是 {"value":"10.25","unit":"W"}。decimal 用十进制字符串。缺失条件不得猜测。',
             'domain':domain.model_dump(mode='json'),'candidate_schema':schema,'untrusted_source_blocks':visible}
+        prompt['document_structure_policy']='每个 table_row 块含表头和完整数据行，逐行检查领域内事实，不能因正文重复第一行就漏掉其他行。context_before/context_after 仅为邻近上下文，不自动视为该表的标题或脚注。可确认属于当前表的标题/脚注条件必须随每行保留，不只生成独立说明。conditions 不限于 required_conditions；其他已声明且明确适用的条件也必须保留。原文未明确主体归属的公式、限制、误差不得挂到最近对象；无法定位归属的内容写入 extraction_notes，不生成 subject 为空或伪指向的断言。conditions 只能使用当前领域声明的条件名；不能表达的范围写入 extraction_notes，不能发明条件名。native_layout_inference 是解析候选结构，不是已核实业务事实。provenance 仅使用 source_statement/observation/calculation/inference；table_row 和 native_layout_inference 是解析表示标签，不是 provenance。空图片/公式由覆盖报告反映，不得补造。'
         if focus is not None:
             if not isinstance(focus,str) or not focus.strip() or len(focus)>4000:raise ProductError('INVALID_FOCUS','抽取重点必须为不超过4000字符的文本')
             prompt['extraction_focus']=focus
             prompt['focus_boundary']='重点仅限定当前领域和授权来源内的抽取范围，不得改变Schema、证据门禁、身份或条件要求。'
-        allowed=set(aliases.values());usage={};attempts=[]
+        allowed=set(aliases.values());by_block={b['block_id']:b for b in blocks};usage={};attempts=[]
         for attempt in range(2):
             try:response=llm.complete(json.dumps(prompt,ensure_ascii=False,separators=(',',':')))
             except ProductError as error:
@@ -123,6 +126,11 @@ class Application:
                         original=aliases.get(evidence['block_id'],evidence['block_id'])
                         if original not in allowed:errors.append({'path':f'candidates.{index}.evidence.block_id','reason':'只能引用当前样本给出的 Bxxxx 标识'})
                         evidence['block_id']=original
+                        source=by_block.get(original,{})
+                        if source.get('locator',{}).get('unit_type')=='table_row' and evidence['quote'] and evidence['quote'] in source['text']:
+                            # A cell fragment alone loses its header, units and scope.
+                            # Cite the complete parser-derived row, not invented prose.
+                            evidence['quote']=source['text']
                     normalized.append(item)
             if errors:
                 attempts.append({'candidate_ids':[],'invalid_count':len(errors)})
@@ -141,7 +149,7 @@ class Application:
                 from .review import ReviewService
                 ReviewService(self.store).decide(self.principal,kb_id,[c['id'] for c in result['candidates']],'reject','系统自动纠错替代本次尝试，非人工业务确认')
             prompt['repair']={'instruction':'按具体错误修正整个候选批次。不能补造证据或身份；资料无法确定的保留未决。','previous_candidates':raw,'errors':invalid}
-        return {'result':result,'usage':usage,'model':response.model,'attempts':len(attempts),'attempt_log':attempts,'coverage':'empty' if not result['candidates'] else 'candidates_returned'}
+        return {'result':result,'usage':usage,'model':response.model,'attempts':len(attempts),'attempt_log':attempts,'coverage':'empty' if not result['candidates'] else 'candidates_returned','extraction_notes':response.data.get('extraction_notes',[])}
 
     @timed('task.execute')
     def execute_task(self,kb_id,task_id):

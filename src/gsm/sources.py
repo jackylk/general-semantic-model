@@ -29,16 +29,26 @@ class SourceService:
             return {'id':str(row[0]),'sha256':digest,'byte_count':len(data)}
 
     @timed('source.persist_parse')
-    def save_parse(self,principal,kb_id,source_version_id,parser_version,blocks,raw=None):
+    def save_parse(self,principal,kb_id,source_version_id,parser_version,blocks,raw=None,units=None,coverage=None):
         principal.require(kb_id,write=True)
         with self.store.transaction(principal,kb_id) as conn:
-            parse_id=conn.execute('INSERT INTO parse_versions(kb_id,source_version_id,parser_version,raw_output) VALUES(%s,%s,%s,%s) RETURNING id',(kb_id,source_version_id,parser_version,Jsonb(raw or {}))).fetchone()[0]
+            parse_id=conn.execute('INSERT INTO parse_versions(kb_id,source_version_id,parser_version,raw_output,document_units,coverage) VALUES(%s,%s,%s,%s,%s,%s) RETURNING id',(kb_id,source_version_id,parser_version,Jsonb(raw or {}),Jsonb(units or []),Jsonb(coverage or {}))).fetchone()[0]
             result=[]
             for i,block in enumerate(blocks):
                 text=block['text']; locator={k:v for k,v in block.items() if k!='text'}
                 block_id=conn.execute('INSERT INTO source_blocks(kb_id,parse_version_id,ordinal,text,locator,fingerprint) VALUES(%s,%s,%s,%s,%s,%s) RETURNING id',(kb_id,parse_id,i,text,Jsonb(locator),sha256(text.encode()).hexdigest())).fetchone()[0]
                 result.append({'id':str(block_id),'text':text,'locator':locator})
             return {'id':str(parse_id),'blocks':result}
+
+    def parse_report(self,principal,kb_id,parse_id,include_units=False):
+        principal.require(kb_id,write=True)
+        with self.store.transaction(principal,kb_id) as conn:
+            row=conn.execute('SELECT source_version_id,parser_version,document_units,coverage FROM parse_versions WHERE kb_id=%s AND id=%s',(kb_id,parse_id)).fetchone()
+        if not row:raise ProductError('NOT_FOUND','解析版本不存在或无权限')
+        result={'parse_version_id':parse_id,'source_version_id':str(row[0]),'parser_version':row[1],
+            'unit_count':len(row[2]),'coverage':row[3] or {'status':'legacy_unassessed','semantic_completeness':'not_proven'}}
+        if include_units:result['units']=row[2]
+        return result
 
     def link_evidence(self,principal,kb_id,record_id,block_id,quote):
         principal.require(kb_id,write=True)

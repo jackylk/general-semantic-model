@@ -1,5 +1,6 @@
 """Necessary lexical grounding checks; these do not prove semantic entailment."""
 import re
+import json
 from decimal import Decimal
 from html.parser import HTMLParser
 
@@ -29,9 +30,34 @@ def numbers(text):
     return {Decimal(m.group('number').replace(',',''))*SCALE[m.group('scale') or ''] for m in re.finditer(r'(?P<number>'+NUMBER+r')\s*(?P<scale>万亿|亿|万)?',text)}
 
 
+def _table_quantities(text,unit,aliases):
+    """Match only a numeric cell's own explicit unit-bearing header.
+
+    Parenthesized annotations are not rendered as invented quantity prose.
+    They count as units only when they match the unit the domain requested.
+    """
+    values=set();decoder=json.JSONDecoder()
+    for start in re.finditer(r'\{',text):
+        try:row,_=decoder.raw_decode(text,start.start())
+        except ValueError:continue
+        if not isinstance(row,dict):continue
+        headers=row.get('headers');cells=row.get('row')
+        if not isinstance(headers,list) or not isinstance(cells,list) or not headers:continue
+        if not all(isinstance(h,list) and len(h)==len(cells) for h in headers):continue
+        for index,cell in enumerate(cells):
+            suffixes=set()
+            for header in headers:
+                if isinstance(header[index],str) and (match:=re.search(r'[([]([^()\[\]]+)[)\]]\s*$',header[index])):
+                    suffixes.add(match.group(1).strip())
+            if len(suffixes)!=1 or not suffixes.intersection([unit,*aliases]) or not isinstance(cell,str):continue
+            match=re.fullmatch(r'(?P<number>'+NUMBER+r')\s*(?P<scale>万亿|亿|万)?',cell.strip())
+            if match:values.add(Decimal(match.group('number').replace(',',''))*SCALE[match.group('scale') or ''])
+    return values
+
+
 def quantities(text,unit,aliases=()):
+    values=_table_quantities(text,unit,aliases)
     text=evidence_text(text)
-    values=set()
     for alias in [unit,*aliases]:
         pattern=r'(?P<number>'+NUMBER+r')\s*(?P<scale>万亿|亿|万)?\s*'+re.escape(alias)+r'(?:max|min|typ|MAX|MIN|TYP)?(?![A-Za-z])'
         for match in re.finditer(pattern,text):

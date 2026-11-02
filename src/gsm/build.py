@@ -1,5 +1,5 @@
 from gsm.observability import timed,phase
-from typing import Any
+from typing import Any,Literal
 from hashlib import sha256
 from pathlib import Path
 from decimal import Decimal,InvalidOperation
@@ -27,7 +27,7 @@ class Candidate(StrictModel):
     conditions: dict = Field(default_factory=dict)
     evidence: list[EvidenceInput] = Field(default_factory=list)
     participants: list[dict[str,str]] = Field(default_factory=list)
-    provenance: str = 'source_statement'
+    provenance: Literal['source_statement','observation','calculation','inference'] = 'source_statement'
     valid_from: str | None = None
     valid_to: str | None = None
 
@@ -178,13 +178,14 @@ class BuildService:
                         payload['conflicting_record_ids']=conflicting
                 links=[]
                 for e in c.evidence:
-                    row=conn.execute('SELECT text FROM source_blocks WHERE kb_id=%s AND id=%s',(kb_id,e.block_id)).fetchone()
+                    row=conn.execute('SELECT text,locator FROM source_blocks WHERE kb_id=%s AND id=%s',(kb_id,e.block_id)).fetchone()
                     from .grounding import locate_quote
                     span=locate_quote(row[0],e.quote) if row else None
                     if span is None:add('EVIDENCE_NOT_LOCATED')
                     else:
                         e.quote=row[0][span[0]:span[1]]
                         links.append((e,span[0]))
+                        if row[1].get('requires_review'):add('LAYOUT_REVIEW_REQUIRED',False)
                 payload['evidence']=[e.model_dump(mode='json') for e in c.evidence]
                 if c.provenance in ('source_statement','observation'):
                     from .grounding import grounded,numbers,quantities
@@ -245,7 +246,7 @@ class BuildService:
         return {'build_id':build_id,'preview_only':True,'record_ids':[str(rid) for rid in build[0]],'matching_count':len(records),'records':records[offset:offset+limit],'offset':offset,'manifest':build[2]}
 
     @timed('build.index_and_wiki')
-    def finish(self,principal,kb_id,domain_version_id,record_ids,embed=True):
+    def finish(self,principal,kb_id,domain_version_id,record_ids,embed=True,source_parse_ids=None):
         from .search import tokenize
         from .adapters.embedding import Embedding
         from .releases import ReleaseService
@@ -271,8 +272,11 @@ class BuildService:
             rows=[(rid,kind,{**payload,'evidence':by_record[str(rid)]}) for rid,kind,payload in rows]
             names={d.id:d.name for group in (domain.properties,domain.relations) for d in group}
             texts=[names.get(payload.get('predicate'),'')+' '+json.dumps(payload,ensure_ascii=False,sort_keys=True) for _,_,payload in rows]
-            parse_ids=sorted({str(row[4]) for row in active})
-            source_blocks=conn.execute('SELECT id,text FROM source_blocks WHERE kb_id=%s AND parse_version_id=ANY(%s::uuid[]) ORDER BY id',(kb_id,parse_ids)).fetchall()
+            parse_ids=sorted({str(row[4]) for row in active} | set(source_parse_ids or []))
+            parse_rows=conn.execute('SELECT p.id,p.source_version_id,p.parser_version,p.coverage,jsonb_array_length(p.document_units) FROM parse_versions p WHERE p.kb_id=%s AND p.id=ANY(%s::uuid[]) AND NOT EXISTS(SELECT 1 FROM source_withdrawals w WHERE w.kb_id=p.kb_id AND w.source_version_id=p.source_version_id) ORDER BY p.id',(kb_id,parse_ids)).fetchall()
+            if len(parse_rows)!=len(parse_ids):raise ProductError('NOT_FOUND','构建来源解析版本不存在或无权限')
+            document_coverage=[{'parse_version_id':str(pid),'source_version_id':str(source),'parser_version':version,'unit_count':count,'coverage':coverage or {'status':'legacy_unassessed','semantic_completeness':'not_proven'}} for pid,source,version,coverage,count in parse_rows]
+            source_blocks=conn.execute("SELECT id,text FROM source_blocks WHERE kb_id=%s AND parse_version_id=ANY(%s::uuid[]) AND locator->'requires_review' IS DISTINCT FROM 'true'::jsonb ORDER BY id",(kb_id,parse_ids)).fetchall()
         with phase('build.semantic_embedding'):
             vectors=Embedding().embed(texts) if embed else [None]*len(texts)
         with phase('build.source_embedding'):
@@ -288,5 +292,9 @@ class BuildService:
             from .wiki import render_wiki
             with phase('build.wiki'):
                 wiki=render_wiki(rows,domain,citations)
-            conn.execute('UPDATE builds SET ready=true,manifest=%s WHERE kb_id=%s AND id=%s',(Jsonb({'domain_version_id':domain_version_id,'wiki':wiki,'support_snapshot':[str(row[0]) for row in active],'vector_ready':embed,'baseline_block_ids':[str(r[0]) for r in source_blocks]}),kb_id,build_id))
+                if any(r['coverage'].get('status') in ('incomplete','legacy_unassessed') for r in document_coverage):
+                    warning='解析覆盖提示：部分资料存在未识别区域或尚未评估的解析版本；已引用内容不代表完整覆盖。'
+                    wiki['limitations'].append(warning)
+                    for page in wiki['pages']:page['text']+='\n\n> '+warning+'\n'
+            conn.execute('UPDATE builds SET ready=true,manifest=%s WHERE kb_id=%s AND id=%s',(Jsonb({'domain_version_id':domain_version_id,'wiki':wiki,'document_coverage':document_coverage,'support_snapshot':[str(row[0]) for row in active],'vector_ready':embed,'baseline_block_ids':[str(r[0]) for r in source_blocks]}),kb_id,build_id))
         return build_id
