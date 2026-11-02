@@ -61,3 +61,24 @@ CLI 会话启动后，开发者输入“我要开始创建知识库”。图形�
 正式试用应使用产品 Git 仓库之外的独立目录，例如 `../gsm-knowledge-workspaces`。初始化生成空收件目录和新的知识库作用域，不预置资料位置。启动器显式传入 workspace-write 并清空额外 writable_roots，不改全局设置。该写沙箱不是读取隔离；本次验收额外使用了外层 OS 读取限制，见测试规范。[OpenAI 官方沙箱说明](https://learn.chatgpt.com/docs/sandboxing)。
 
 计时诊断默认关闭。需要按阶段复现时，为 MCP 服务和 worker 设置 `GSM_TIMING_LOG=/absolute/path/timings.jsonl`；可选 `GSM_TIMING_ROLE=developer|consumer|worker` 标记来源。日志记录阶段、起止时间、耗时和作用域 ID，不记录凭据、提示词、原文或异常正文。嵌套阶段不可与父阶段重复求和；网络失败且未返回 usage 的上游调用不能据此准确计费。
+
+
+## 检索预算与可选分词器
+
+检索默认最多 8 轮、累计 64000 token。语义词汇和来源名称来自当前发布版；产品不会预置领域知识。回答为 supported 前还要基于实际已读原文做一次模型一致性复核。这是模型检查，不能代替专家金标准。预算不足以完成回答和复核时，返回不足，不跳过复核。
+
+未配置分词器时按 UTF-8 字节上界估算输入，中文和重复长原文可能使这个估算过于保守。可安装与服务模型匹配的官方分词器。本次实验的 deepseek-flash 对应 DeepSeek-V4.1-Flash；远端别名可能变化，使用前应重新核对，不能默认未来仍相同。分词器只用于本地输入估算，带 15% 余量和 256 token 开销；服务端 usage 是实际用量依据，超出估算会报 TOKEN_COUNT_MISMATCH。
+
+本次文件来自官方仓库固定版本（不提交模型文件）：
+
+```bash
+mkdir -p runtime/tokenizers/deepseek-v41
+curl -fL --retry 3 \
+  https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash/resolve/314113f8a7dadb388215396ba5fbee2c610a04d6/tokenizer.json \
+  -o runtime/tokenizers/deepseek-v41/tokenizer.json
+shasum -a 256 runtime/tokenizers/deepseek-v41/tokenizer.json
+```
+
+预期 SHA-256 为 `c90dfa01249db1be4245780a052ede752e1361c612ac6d08e2bdada7d599476b`，6367257 字节。核对后在本地 `.env` 配置 `.env.example` 中两项 GSM_TOKENIZER 参数并重启服务。不要给不匹配的服务模型配置此文件。模型控制符不会把不可信资料中的同名文本当作单个控制 token。
+
+依据：[官方 token 用量说明](https://api-docs.deepseek.com/quick_start/token_usage/)、[模型信息](https://api-docs.deepseek.com/quick_start/pricing/)、[官方分词器使用说明](https://github.com/deepseek-ai/deepseek-recipe/blob/main/docs/tokenizer.md)。

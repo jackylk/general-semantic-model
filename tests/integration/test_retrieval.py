@@ -113,7 +113,7 @@ def test_retrieval_uses_published_vocabulary_batches_evidence_and_rejects_bad_an
                 assert data['original_blocks'][0]['source']['filename']=='a.txt'
                 assert '10.25' in data['original_blocks'][0]['text']
                 return Completion({'supported':False,'reasons':['数值或主体不受所引原文支持']},'test',{})
-            assert any(x['id']=='power' for x in data['domain']['properties'])
+            if 'domain' in data:assert any(x['id']=='power' for x in data['domain']['properties'])
             self.n+=1
             if self.n==1:return Completion({'action':'read_evidence_batch','args':{'evidence_ids':[eid]}},'test',{})
             return Completion({'action':'finish','status':'supported','answer':'另一个设备功率100 W','citations':[eid]},'test',{})
@@ -121,3 +121,38 @@ def test_retrieval_uses_published_vocabulary_batches_evidence_and_rejects_bad_an
     assert model.reviewed and result['status']=='insufficient'
     assert result['support_check']['supported'] is False
     assert '100 W' not in result['answer']
+
+
+def test_retrieval_reserves_budget_to_finish_from_already_read_originals(build_env):
+    import json
+    from gsm.retrieval import RetrievalService
+    from gsm.adapters.llm import Completion
+    store,b,review,p,kb,dv,block=build_env
+    _,rel=publish(build_env);eid=QueryService(store).records(p,kb,rel,kind='assertion')[0]['evidence_ids'][0]
+    class Model:
+        def __init__(self):self.n=0
+        def complete(self,prompt,system='',**kwargs):
+            if system.startswith('证据一致性核验'):return Completion({'supported':True,'reasons':[]},'test',{})
+            self.n+=1;data=json.loads(prompt)
+            if self.n==1:return Completion({'action':'read_evidence','args':{'evidence_id':eid}},'test',{'total_tokens':1000})
+            assert 'original_blocks' in data and 'history' not in data
+            assert '10.25' in data['original_blocks'][0]['text']
+            return Completion({'action':'finish','status':'supported','answer':'20℃时10.25 W','citations':[eid]},'test',{'total_tokens':100})
+    result=RetrievalService(store,Model(),max_tokens=8000).retrieve(p,kb,rel,'功率？')
+    assert result['status']=='supported' and result['trace'][-1]['grounded_finalization']
+
+
+def test_retrieval_does_not_spend_finish_budget_when_required_review_cannot_fit(build_env):
+    from gsm.retrieval import RetrievalService
+    from gsm.adapters.llm import Completion
+    store,b,review,p,kb,dv,block=build_env
+    _,rel=publish(build_env);eid=QueryService(store).records(p,kb,rel,kind='assertion')[0]['evidence_ids'][0]
+    class Model:
+        def __init__(self):self.calls=0
+        def complete(self,*args,**kwargs):
+            self.calls+=1
+            assert self.calls==1,'must stop before paying for an unreviewable finish'
+            return Completion({'action':'read_evidence','args':{'evidence_id':eid}},'test',{'total_tokens':7000})
+    model=Model();result=RetrievalService(store,model,max_tokens=10000).retrieve(p,kb,rel,'功率')
+    assert result['status']=='insufficient' and result['failure_code']=='RETRIEVAL_BUDGET'
+    assert result['support_check']['supported'] is False

@@ -15,7 +15,16 @@ for role in ('developer','consumer'):
             elif kind=='item_completed' and v.get('item',{}).get('type')=='McpToolCall':
                 item=v['item'];duration=item.get('duration');args=item.get('arguments',{})
                 elapsed=round((duration.get('secs',0)+duration.get('nanos',0)/1e9)*1000,3) if duration is not None else (v['completed_at_ms']-v['started_at_ms'] if v.get('completed_at_ms') is not None and v.get('started_at_ms') is not None else None)
-                tools.append({'role':role,'turn_id':tid,'tool':item['tool'],'started_at_ms':v.get('started_at_ms'),'completed_at_ms':v.get('completed_at_ms'),'duration_ms':elapsed,'scope':{k:args[k] for k in ['kb_id','release_id','source_version_id','domain_version_id','task_id','build_id'] if k in args},'status':item.get('status')})
+                outcome={}
+                try:
+                    result=json.loads(item.get('result',{}).get('content',[])[0]['text'])
+                    if item['tool'] in ('analyze_samples','preview_extraction','start_build','revalidate_candidates','evaluate','get_task','retry_task','cancel_task'):
+                        outcome={k:result.get(v) for k,v in [('result_task_id','id'),('result_task_kind','kind'),('result_task_status','status')]}
+                    if item['tool']=='register_source':outcome['result_source_version_id']=result.get('id')
+                    if item['tool']=='publish':outcome['result_release_id']=result.get('release_id')
+                    if result.get('error'):outcome['error_code']=result['error'].get('code')
+                except (IndexError,KeyError,ValueError,TypeError):pass
+                tools.append({**outcome,'role':role,'turn_id':tid,'tool':item['tool'],'started_at_ms':v.get('started_at_ms'),'completed_at_ms':v.get('completed_at_ms'),'duration_ms':elapsed,'scope':{k:args[k] for k in ['kb_id','release_id','source_version_id','domain_version_id','task_id','build_id'] if k in args},'status':item.get('status')})
     ordered=list(turns.values());phases=sorted(c.glob(role+'-phase*.jsonl'),key=lambda p:int(p.stem.split('phase')[-1]))
     # Each CLI invocation starts one native turn. Preserve turn IDs even if a count mismatch occurs.
     for index,row in enumerate(ordered):row['phase']=phases[index].stem if len(ordered)==len(phases) else None

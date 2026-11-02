@@ -27,7 +27,7 @@ class Application:
     def llm(self):
         from dotenv import dotenv_values
         cfg={**dotenv_values('.env'),**os.environ}
-        return LLM.from_env_file(Path(cfg.get('GSM_LLM_ENV_FILE',str(Path.home()/'code/.env'))).expanduser(),cfg.get('GSM_LLM_BASE_URL','https://api.deepseek.com'),cfg.get('GSM_LLM_MODEL','deepseek-flash'))
+        return LLM.from_env_file(Path(cfg.get('GSM_LLM_ENV_FILE',str(Path.home()/'code/.env'))).expanduser(),cfg.get('GSM_LLM_BASE_URL','https://api.deepseek.com'),cfg.get('GSM_LLM_MODEL','deepseek-flash'),tokenizer_path=cfg.get('GSM_TOKENIZER_FILE'),tokenizer_sha256=cfg.get('GSM_TOKENIZER_SHA256'))
 
     @timed('source.parse_or_cache')
     def parse_source(self,kb_id,source_version_id):

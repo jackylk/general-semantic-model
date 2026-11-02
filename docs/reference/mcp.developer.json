@@ -594,6 +594,18 @@
         "idempotency_key": {
           "title": "Idempotency Key",
           "type": "string"
+        },
+        "focus": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Focus"
         }
       },
       "required": [

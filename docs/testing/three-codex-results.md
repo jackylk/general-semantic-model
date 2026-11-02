@@ -22,11 +22,11 @@ Wiki为1篇记录总览，150个引用均经公开API读取且原文切片/偏�
 
 | 类别 | 文件数 | 物理行 | 非空行 |
 |---|---:|---:|---:|
-| product_python | 31 | 1871 | 1670 |
+| product_python | 32 | 2018 | 1799 |
 | migrations_sql | 8 | 47 | 47 |
 | workspace_launcher | 1 | 11 | 10 |
-| tests_python | 17 | 1011 | 857 |
-| scripts_python | 20 | 576 | 550 |
+| tests_python | 18 | 1161 | 985 |
+| scripts_python | 20 | 585 | 559 |
 
 
 固定物理表共17张：`schema_migrations`, `knowledge_bases`, `domain_versions`, `source_versions`, `source_withdrawals`, `parse_versions`, `source_blocks`, `records`, `evidence_links`, `builds`, `releases`, `tasks`, `review_decisions`, `search_documents`, `feedback`, `onboarding`, `source_search_documents`。
@@ -42,3 +42,14 @@ Wiki为1篇记录总览，150个引用均经公开API读取且原文切片/偏�
 ## 限制
 
 这是AI参考基准和AI复核，不是人工专家验收；只有一个领域，不是三领域通用性结论。未验收扫描件OCR、生产安全、稳定性能或计费上限。原文问答、语义表覆盖与图覆盖分别报告。
+
+
+## R2进度快照（尚未验收）
+
+第二窗口对同6份原始文档独立建新库并修补自己发现的缺口，发布429条记录：91对象、256属性断言、82关系，82条带条件。这个规模来自其交接，最新去重图及Wiki逐引用审计尚未完成。
+
+第三窗口固定最新发布版完成36题：基线12题为9 supported、1 partial、2 insufficient（后两题预期应拒答）；追加24题为19 supported、2 partial、3 insufficient。追加题语义覆盖计数为14 direct、8 partial、2 none。这些是独立C3的输出分类，尚不能称为C1逐题审计后的最终分数。Q07供应商跨节点路径、Q33供电路径仍有缺口；Q32看门狗路径已有实际图支持。
+
+第二窗口自己固定的18题，在上一版后台retrieve下为9通过、9预算失败。第三窗口主要直接调用公开查询、图与原文工具，其结果不能代替后台DeepSeek Agent的通过率。当前新增预算预留及可选匹配分词器，94项自动检查通过，一次真实deepseek-flash JSON调用验证了分词器加载及usage检查；尚未完成新代码整轮检索回归。不得把自动测试通过解释为领域验收通过。
+
+[机器可读快照](../validation/round2-progress.json)保留发布ID、逐类计数、固定表名及当前代码规模。完整阶段时间和最终复现报告仍在整理。

@@ -46,3 +46,24 @@ def test_answer_review_deduplicates_long_originals_without_crossing_sources():
     assert len(json.dumps(compact))<len(text)*2
     other={**base,'id':'other','source_version_id':'other-source'}
     assert len(review_evidence(evidence+[other])['original_blocks'])==2
+
+
+def test_long_quote_does_not_duplicate_the_complete_original_in_planner_context():
+    from gsm.retrieval import model_view
+    quote='table row '*1500;text='header\n'+quote+'\nfooter'
+    view=model_view({'text':text,'quote':quote,'start_offset':7,'end_offset':7+len(quote)})
+    assert view['text']==text and view['quote_is_excerpt']
+    assert view['start_offset']==7 and len(json.dumps(view))<len(text)*1.2
+
+
+def test_domain_vocabulary_compacts_defaults_but_keeps_constraints_and_unknown_identity():
+    from gsm.retrieval import compact_vocabulary
+    definition={'types':[{'id':'unknown','name':'Unknown','identity':[],'aliases':[]}],
+        'properties':[{'id':'power','name':'Power','value_type':'quantity','subject_types':['device'],'units':['W'],'required_conditions':['temperature'],'unit_aliases':{},'enum_values':[],'aliases':[]}],
+        'relations':[],'conditions':[{'id':'region','value_type':'enum','enum_values':['X']} ]}
+    result=compact_vocabulary(definition)
+    assert result['types'][0]['identity']==[]
+    prop=result['properties'][0]
+    assert prop['units']==['W'] and prop['required_conditions']==['temperature']
+    assert 'aliases' not in prop and 'enum_values' not in prop and 'unit_aliases' not in prop
+    assert result['conditions'][0]['enum_values']==['X']

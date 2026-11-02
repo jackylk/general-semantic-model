@@ -1,0 +1,127 @@
+{
+  "snapshot_utc": "2026-11-02T06:39:45.622702+00:00",
+  "status": "in_progress_not_accepted",
+  "release_id": "8119d7bc-cf93-49e6-bb12-4e3eb081eec9",
+  "source_count": 6,
+  "source_pages": 67,
+  "original_blocks": 1133,
+  "records_reported_by_developer": {
+    "records": 429,
+    "retained": 318,
+    "new": 111,
+    "objects": 91,
+    "assertions": 256,
+    "relations": 82,
+    "by_source": [
+      14,
+      22,
+      165,
+      109,
+      69,
+      50
+    ],
+    "conditional_records": 82
+  },
+  "developer_selftest_previous_code": {
+    "questions": 18,
+    "unchanged_questions_and_criteria": true,
+    "before": {
+      "pass": 3,
+      "blocked": 14,
+      "wrong_source": 1
+    },
+    "after": {
+      "pass": 9,
+      "blocked_budget": 9
+    },
+    "source_error_case": "原同题本次仅FCU引用，通过；不是通用性结论",
+    "feedback_id": "14008157-13da-477d-bdf6-d51f79edb9e2",
+    "comparison": "domain/round2/repair-before-after.json",
+    "full_public_traces_and_utc": "domain/round2/after-r2-*.json"
+  },
+  "consumer_snapshot": {
+    "round2-answers.json": {
+      "questions": 12,
+      "answer_status": {
+        "supported": 9,
+        "partial": 1,
+        "insufficient": 2
+      },
+      "semantic_coverage": {
+        "direct": 9,
+        "partial": 1,
+        "none": 2
+      }
+    },
+    "round2-extension-answers.json": {
+      "questions": 24,
+      "answer_status": {
+        "supported": 19,
+        "partial": 2,
+        "insufficient": 3
+      },
+      "semantic_coverage": {
+        "direct": 14,
+        "partial": 8,
+        "none": 2
+      }
+    }
+  },
+  "code_inventory": {
+    "product_python": {
+      "files": 32,
+      "lines": 2018,
+      "nonblank": 1799
+    },
+    "tests_python": {
+      "files": 18,
+      "lines": 1161,
+      "nonblank": 985
+    },
+    "scripts_python": {
+      "files": 20,
+      "lines": 585,
+      "nonblank": 559
+    },
+    "workspace_launcher": {
+      "files": 1,
+      "lines": 11,
+      "nonblank": 10
+    },
+    "migrations_sql": {
+      "files": 8,
+      "lines": 47,
+      "nonblank": 47
+    }
+  },
+  "predefined_tables": [
+    "schema_migrations",
+    "knowledge_bases",
+    "domain_versions",
+    "source_versions",
+    "source_withdrawals",
+    "parse_versions",
+    "source_blocks",
+    "records",
+    "evidence_links",
+    "builds",
+    "releases",
+    "tasks",
+    "review_decisions",
+    "search_documents",
+    "feedback",
+    "onboarding",
+    "source_search_documents"
+  ],
+  "predefined_table_count": 17,
+  "predefined_automotive_tables": 0,
+  "predefined_automotive_graphs": 0,
+  "automatic_checks": 94,
+  "caveats": [
+    "C3已完成36题，当前为C3输出计数；C1逐引用审计与新代码后台检索回归尚未完成。",
+    "C2自测9题预算失败属于上一版产品代码；新代码整轮实测尚未完成。",
+    "独立C3直接调用公开语义与原文工具，其答案结果不能代替后台DeepSeek retrieve的通过率。",
+    "429条记录和子类规模取自C2交接，最新Wiki/去重图规模仍待C1独立审计。",
+    "两题正确拒答与一题实际图覆盖不足分别记录，不把全部insufficient一律计为错误或正确。"
+  ]
+}
