@@ -36,6 +36,15 @@ class TaskService:
             if not row: raise ProductError('NOT_FOUND','任务不存在或无权限')
             return dict(zip(('id','kind','status','stage','checkpoint','error','payload'),(str(row[0]),*row[1:])))
 
+    def status(self,principal,kb_id,task_id):
+        principal.require(kb_id,write=True)
+        array_count=lambda name: "jsonb_array_length(CASE WHEN jsonb_typeof(checkpoint->'"+name+"')='array' THEN checkpoint->'"+name+"' ELSE '[]'::jsonb END)"
+        query="SELECT id,kind,status,stage,error,"+array_count('completed_batches')+",CASE WHEN jsonb_typeof(checkpoint->'coverage')='object' THEN checkpoint->'coverage'->'planned_batches' ELSE NULL END,"+array_count('candidate_ids')+",checkpoint->>'build_id' FROM tasks WHERE kb_id=%s AND id=%s"
+        with self.store.transaction(principal,kb_id) as conn:row=conn.execute(query,(kb_id,task_id)).fetchone()
+        if not row:raise ProductError('NOT_FOUND','任务不存在或无权限')
+        return {'id':str(row[0]),'kind':row[1],'status':row[2],'stage':row[3],'error':row[4],
+            'progress':{'completed_batches':row[5],'planned_batches':row[6],'candidate_count':row[7],'build_id':row[8]}}
+
     def checkpoint(self,principal,kb_id,task_id,stage,checkpoint):
         principal.require(kb_id,write=True)
         with self.store.transaction(principal,kb_id) as conn:

@@ -163,8 +163,7 @@ def create_server(app:Application):
     @tool
     def get_task_status(kb_id:str,task_id:str)->dict:
         """轻量轮询：不重复返回大批候选、原文和复核细节。完成后get_task读取完整结果。"""
-        task=app.tasks.get(p,kb_id,task_id);cp=task['checkpoint'] or {}
-        return {'id':task['id'],'kind':task['kind'],'status':task['status'],'stage':task['stage'],'error':task['error'],'progress':{'completed_batches':len(cp.get('completed_batches',[])),'planned_batches':cp.get('coverage',{}).get('planned_batches'),'candidate_count':len(cp.get('candidate_ids',[])),'build_id':cp.get('build_id')}}
+        return app.tasks.status(p,kb_id,task_id)
 
     @tool
     def cancel_task(kb_id:str,task_id:str)->dict:

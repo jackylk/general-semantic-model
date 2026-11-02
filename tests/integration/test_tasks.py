@@ -59,3 +59,18 @@ def test_cancelled_queued_task_never_executes_and_cancel_is_idempotent():
     executions=[]
     result=Worker(tasks,{'count':lambda payload,checkpoint:executions.append(1)}).run(p,kb,task['id'])
     assert result['status']=='cancelled' and executions==[]
+
+
+def test_lightweight_status_handles_non_pipeline_coverage_without_loading_payload(tmp_path,monkeypatch):
+    from uuid import uuid4
+    from gsm.config import Settings
+    from gsm.store import Store
+    from gsm.auth import Principal
+    from gsm.tasks import TaskService
+    s=Store(Settings.load());s.migrate();kb=str(uuid4());p=Principal('developer',frozenset([kb]));s.create_kb(p,kb,'status')
+    service=TaskService(s);task=service.submit(p,kb,'extract',{'synthetic':True},'light-status')
+    service.checkpoint(p,kb,task['id'],'complete',{'coverage':'candidates_returned','result':{'candidates':[{'private':'not returned'}]}})
+    monkeypatch.setattr(service,'get',lambda *args: (_ for _ in ()).throw(AssertionError('must not load full checkpoint')))
+    status=service.status(p,kb,task['id'])
+    assert status['progress']['planned_batches'] is None and status['progress']['candidate_count']==0
+    assert 'checkpoint' not in status and 'payload' not in status

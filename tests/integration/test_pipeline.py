@@ -24,11 +24,13 @@ def test_pipeline_runs_all_sources_checkpoints_and_builds_cited_pages(tmp_path,m
     for i in range(2):
         file=root/'documents'/f'{i}.txt';file.write_text(f'设备 A 序号 001。设备 B 序号 002。A 连接 B。20℃时 A 功率 10.25 W。')
         sources.append(app.sources.import_file(app.principal,kb,file.name)['id'])
+    app.sources.save_parse(app.principal,kb,sources[0],'plain-text-v1',[{'text':(root/'documents/0.txt').read_text()},{'text':'Review-only derived row','requires_review':True,'unit_type':'table_row'}])
     class Model:
         model='test';base_url='https://test.invalid'
         def complete(self,prompt,**kw):
             data=json.loads(prompt)
             if data.get('task')=='check_record_support':return Completion({'reviews':[{'id':r['id'],'supported':r['kind']!='relation','reason':'test verdict'} for r in data['records']]},'test',{'total_tokens':10})
+            assert all(not b.get('locator',{}).get('requires_review') for b in data['untrusted_source_blocks'])
             block=data['untrusted_source_blocks'][0]['block_id']
             from test_build import candidates
             return Completion({'candidates':candidates(block)},'test',{'total_tokens':10})
@@ -38,6 +40,8 @@ def test_pipeline_runs_all_sources_checkpoints_and_builds_cited_pages(tmp_path,m
     assert done['status']=='succeeded',done.get('error')
     result=done['checkpoint'];assert len(result['completed_batches'])==2 and result['coverage']['sources']==2
     assert len(result['excluded_record_ids'])==2
+    assert result['coverage']['blocks']==3 and result['coverage']['automatic_blocks']==2
+    assert result['coverage']['deferred_blocks']==1 and len(result['deferred_block_ids'])==1
     assert result['build_id'] and result['coverage']['semantic_completeness']=='not_proven'
     rel=app.publish(kb,result['build_id'])
     assert (root/'releases'/rel/'manifest.json').exists()

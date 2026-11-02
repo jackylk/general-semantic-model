@@ -19,6 +19,14 @@ def split_batches(blocks,budget):
     return batches
 
 
+def automatic_blocks(blocks):
+    """Review-only derivatives remain inventoried, not sent to futile auto calls."""
+    selected=[];deferred=[]
+    for block in blocks:
+        (deferred if block.get('locator',{}).get('requires_review') is True else selected).append(block)
+    return selected,deferred
+
+
 def product_fingerprint():
     root=Path(__file__).resolve().parent;digest=hashlib.sha256()
     for path in sorted(root.rglob('*.py')):
@@ -39,11 +47,14 @@ def run(app,kb_id,task_id,payload,checkpoint):
     def save(stage):app.tasks.checkpoint(p,kb_id,task_id,stage,state)
     with phase('pipeline.parse'):
         blocks=app.blocks(kb_id,source_ids)
-    batches=split_batches(blocks,budget)
-    signature=hashlib.sha256(json.dumps([(b['block_id'],b['span_start'],b['span_end']) for batch in batches for b in batch],sort_keys=True).encode()).hexdigest()
+    automatic,deferred=automatic_blocks(blocks)
+    batches=split_batches(automatic,budget)
+    signature=hashlib.sha256(json.dumps({'automatic':[(b['block_id'],b['span_start'],b['span_end']) for batch in batches for b in batch],'deferred':[b['block_id'] for b in deferred]},sort_keys=True).encode()).hexdigest()
     if state.get('batch_plan_hash') and state['batch_plan_hash']!=signature:raise ProductError('PIPELINE_INPUT_CHANGED','解析版本或批次计划发生变化')
     state['batch_plan_hash']=signature
     state['coverage']={'sources':len(source_ids),'source_ids':source_ids,'blocks':len(blocks),'characters':sum(len(b['text']) for b in blocks),'planned_batches':len(batches),'semantic_completeness':'not_proven','note':'处理字符覆盖不等于事实、关系或主题完整覆盖；空批次和未获支持记录保持可见。'}
+    state['coverage'].update({'automatic_blocks':len(automatic),'automatic_characters':sum(len(b['text']) for b in automatic),'deferred_blocks':len(deferred),'deferred_characters':sum(len(b['text']) for b in deferred),'deferred_reason':'review_required_derivative_not_eligible_for_automatic_publication'})
+    state['deferred_block_ids']=[b['block_id'] for b in deferred]
     state['document_coverage']=[app.sources.parse_report(p,kb_id,app.parse_source(kb_id,source_id)) for source_id in source_ids]
     state['coverage']['document_parse_status']='incomplete' if any(r['coverage'].get('status') in ('incomplete','legacy_unassessed') for r in state['document_coverage']) else 'text_extracted_not_semantically_complete'
     save('parsed')

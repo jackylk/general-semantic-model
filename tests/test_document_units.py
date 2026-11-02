@@ -127,3 +127,12 @@ def test_unsupported_merged_cells_are_not_silently_flattened_into_aligned_rows()
     p=Parser.from_middle(raw,'test')
     assert p.coverage['status']=='incomplete'
     assert not any(b.get('unit_type')=='table_row' for b in p.blocks)
+
+
+def test_automatic_extraction_defers_review_only_derivatives_without_losing_units():
+    from gsm.pipeline import automatic_blocks
+    blocks=[{'block_id':'original','text':'original source','locator':{}},{'block_id':'derived','text':'candidate row','locator':{'requires_review':True}},{'block_id':'structured','text':'known grid row','locator':{'unit_type':'table_row'}}]
+    selected,deferred=automatic_blocks(blocks)
+    assert [x['block_id'] for x in selected]==['original','structured']
+    assert [x['block_id'] for x in deferred]==['derived']
+    assert len(blocks)==3 and blocks[1]['text']=='candidate row'
