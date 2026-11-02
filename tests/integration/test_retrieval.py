@@ -57,3 +57,19 @@ def test_retrieval_agent_uses_tools_and_rejects_fabricated_citations(build_env):
     class BadModel:
         def complete(self,*args,**kwargs):return Completion({'action':'finish','answer':'unknown claim','citations':['invented'],'status':'supported'},'test',{})
     with pytest.raises(ProductError):RetrievalService(store,BadModel()).retrieve(p,kb,rel,'问题')
+
+
+def test_multi_round_evidence_context_has_bounded_budget_for_real_documents(build_env):
+    from gsm.retrieval import RetrievalService
+    from gsm.adapters.llm import Completion
+    store,b,review,p,kb,dv,block=build_env
+    data,rel=publish(build_env);evidence=QueryService(store).records(p,kb,rel,kind='assertion')[0]['evidence_ids'][0]
+    class Model:
+        def __init__(self):self.n=0
+        def complete(self,*args,**kwargs):
+            self.n+=1
+            if self.n==1:return Completion({'action':'query_records','args':{'kind':'assertion'}},'test',{'total_tokens':6000})
+            if self.n==2:return Completion({'action':'read_evidence','args':{'evidence_id':evidence}},'test',{'total_tokens':7000})
+            return Completion({'action':'finish','status':'supported','answer':'10.25 W at 20℃','citations':[evidence]},'test',{'total_tokens':7000})
+    assert RetrievalService(store,Model()).retrieve(p,kb,rel,'功率')['total_tokens']==20000
+    with pytest.raises(ProductError):RetrievalService(store,Model(),max_tokens=10000).retrieve(p,kb,rel,'功率')

@@ -4,7 +4,7 @@ from .releases import ReleaseService
 from .errors import ProductError
 
 class RetrievalService:
-    def __init__(self,store,llm,max_rounds=6,max_tokens=16000,mode="semantic"):
+    def __init__(self,store,llm,max_rounds=6,max_tokens=64000,mode="semantic"):
         if mode not in ("semantic","baseline"):raise ProductError("INVALID_MODE","未知检索模式")
         self.mode=mode
         self.store=store;self.llm=llm;self.max_rounds=max_rounds;self.max_tokens=max_tokens
