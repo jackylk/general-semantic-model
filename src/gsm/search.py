@@ -17,11 +17,12 @@ class QueryService:
         if not row: raise ProductError('NOT_FOUND','发布版本不存在或无权限')
         return str(row[0]),row[1]
 
-    def records(self,principal,kb_id,release_id,kind=None,subject=None,predicate=None,conditions=None,limit=100):
+    def records(self,principal,kb_id,release_id,kind=None,subject=None,predicate=None,conditions=None,limit=100,_ids=None):
         if not 1<=limit<=200: raise ProductError('INVALID_LIMIT','limit 必须在 1–200')
         with self.store.transaction(principal,kb_id) as conn:
             _,manifest=self.release(conn,kb_id,release_id)
-            rows=conn.execute('SELECT id,kind,payload FROM records WHERE kb_id=%s AND id=ANY(%s::uuid[]) ORDER BY id',(kb_id,manifest['record_ids'])).fetchall()
+            ids=manifest['record_ids'] if _ids is None else sorted(set(manifest['record_ids']) & set(_ids))
+            rows=conn.execute('SELECT id,kind,payload FROM records WHERE kb_id=%s AND id=ANY(%s::uuid[]) ORDER BY id',(kb_id,ids)).fetchall()
             result=[]
             for rid,rkind,payload in rows:
                 if kind and rkind!=kind: continue
@@ -30,7 +31,7 @@ class QueryService:
                 if conditions and any(payload.get('conditions',{}).get(k)!=v for k,v in conditions.items()): continue
                 evidence=conn.execute('SELECT id FROM evidence_links WHERE kb_id=%s AND record_id=%s AND id=ANY(%s::uuid[])',(kb_id,rid,manifest['evidence_ids'])).fetchall()
                 result.append({'id':str(rid),'kind':rkind,'payload':payload,'evidence_ids':[str(e[0]) for e in evidence],'release_id':release_id})
-                if len(result)>=limit:break
+                if len(result)>=(limit if _ids is None else len(ids)):break
             return result
 
     def paths(self,principal,kb_id,release_id,start,target=None,max_depth=3,limit=20):
@@ -48,7 +49,7 @@ class QueryService:
                 WHERE w.depth<%s AND NOT e.dst=ANY(w.nodes))
                 SELECT node,nodes,record_ids FROM walk WHERE depth>0 AND (%s::text IS NULL OR node=%s) LIMIT %s''',
                 (kb_id,manifest['record_ids'],start,start,max_depth,target,target,limit)).fetchall()
-        all_records={r['id']:r for r in self.records(principal,kb_id,release_id,kind='relation',limit=200)}
+        all_records={r['id']:r for r in self.records(principal,kb_id,release_id,kind='relation',_ids={str(r) for _,_,ids in rows for r in ids})}
         return [{'nodes':nodes,'records':[all_records[str(r)] for r in ids if str(r) in all_records],'release_id':release_id} for _,nodes,ids in rows]
 
     def search(self,principal,kb_id,release_id,query,use_vector=True,limit=10):
@@ -66,7 +67,7 @@ class QueryService:
         scores={}
         for ranking in ranked:
             for i,rid in enumerate(ranking):scores[rid]=scores.get(rid,0)+1/(60+i+1)
-        records={r['id']:r for r in self.records(principal,kb_id,release_id,limit=200)}
+        records={r['id']:r for r in self.records(principal,kb_id,release_id,_ids=scores)}
         results=[{**records[rid],'score':score} for rid,score in scores.items() if rid in records]
         originals=self.baseline_search(principal,kb_id,release_id,query,use_vector=use_vector,limit=limit,_vector=query_vector)
         results.extend({'id':item['evidence_id'],'kind':'source_block','payload':{'text':item['text'],'text_is_excerpt':True},'evidence_ids':[item['evidence_id']],'release_id':release_id,'score':item['score']} for item in originals)

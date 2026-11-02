@@ -46,7 +46,7 @@ def test_retrieval_agent_uses_tools_and_rejects_fabricated_citations(build_env):
     evidence=QueryService(store).records(p,kb,rel,kind='assertion')[0]['evidence_ids'][0]
     class ScriptedModel:
         def __init__(self): self.calls=0
-        def complete(self,prompt,system=''):
+        def complete(self,prompt,system='',**kwargs):
             self.calls+=1
             if self.calls==1:return Completion({'action':'query_records','args':{'kind':'assertion'}},'test',{'total_tokens':5})
             if self.calls==2:return Completion({'action':'read_evidence','args':{'evidence_id':evidence}},'test',{'total_tokens':5})
@@ -73,3 +73,24 @@ def test_multi_round_evidence_context_has_bounded_budget_for_real_documents(buil
             return Completion({'action':'finish','status':'supported','answer':'10.25 W at 20℃','citations':[evidence]},'test',{'total_tokens':7000})
     assert RetrievalService(store,Model()).retrieve(p,kb,rel,'功率')['total_tokens']==20000
     with pytest.raises(ProductError):RetrievalService(store,Model(),max_tokens=10000).retrieve(p,kb,rel,'功率')
+
+
+def test_retrieval_refuses_input_before_spending_remaining_budget(build_env):
+    from gsm.retrieval import RetrievalService
+    store,b,review,p,kb,dv,block=build_env
+    _,rel=publish(build_env)
+    class NoCall:
+        def complete(self,*args,**kwargs):raise AssertionError('must stop before paid call')
+    with pytest.raises(ProductError,match='预算'):RetrievalService(store,NoCall(),max_tokens=10).retrieve(p,kb,rel,'问题')
+
+
+def test_search_keeps_hits_after_first_200_records(build_env):
+    from gsm.sources import SourceService
+    store,b,review,p,kb,dv,block=build_env
+    text=' '.join(f'设备 serial{i:03d}' for i in range(205));src=SourceService(store)
+    path=store.settings.source_root/'many.txt';path.write_text(text);v=src.import_file(p,kb,path.name);parsed=src.save_parse(p,kb,v['id'],'text',[{'text':text,'page':1}]);bid=parsed['blocks'][0]['id']
+    data=[{'kind':'object','local_id':str(i),'type_id':'device','name':f'serial{i:03d}','identity':{'serial':f'serial{i:03d}'},'evidence':[{'block_id':bid,'quote':f'设备 serial{i:03d}'}]} for i in range(205)]
+    records=b.ingest(p,kb,dv,data)['candidates'];rel=ReleaseService(store).publish(p,kb,b.finish(p,kb,dv,[r['id'] for r in records],embed=False))
+    target=max(records,key=lambda r:r['id'])
+    hits=QueryService(store).search(p,kb,rel,target['payload']['name'],use_vector=False)
+    assert any(r['id']==target['id'] for r in hits)

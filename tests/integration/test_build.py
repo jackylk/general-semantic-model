@@ -229,3 +229,21 @@ def test_malformed_evidence_structure_is_repaired_instead_of_internal_error(buil
     result=app.extract_candidates(kb,dv,[{'block_id':block,'text':'test'}],Model())
     assert result['result']['candidates'][-1]['status']=='verified'
     assert result['attempts']==2
+
+
+def test_extraction_retries_invalid_json_with_bounded_attempts(build_env):
+    from gsm.application import Application
+    from gsm.adapters.llm import Completion
+    store,b,review,p,kb,dv,block=build_env
+    app=object.__new__(Application);app.store=store;app.principal=p;app.build=b
+    class Model:
+        def __init__(self,always=False):self.calls=0;self.always=always
+        def complete(self,*args,**kwargs):
+            self.calls+=1
+            if self.calls==1 or self.always:raise ProductError('INVALID_MODEL_OUTPUT','bad JSON',[{'reason':'truncated','usage':{'total_tokens':10}}])
+            return Completion({'candidates':candidates(block)},'test',{'total_tokens':5})
+    model=Model();result=app.extract_candidates(kb,dv,[{'block_id':block,'text':'test'}],model)
+    assert model.calls==2 and result['usage']['total_tokens']==15
+    bad=Model(True)
+    with pytest.raises(ProductError) as exc:app.extract_candidates(kb,dv,[{'block_id':block,'text':'test'}],bad)
+    assert bad.calls==2 and exc.value.retryable

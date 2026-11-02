@@ -99,3 +99,14 @@ def test_embedding_bounds_requests_and_preserves_all_long_input_chunks():
         assert ''.join(t for batch in received for t in batch)=='abcdefghijklmnopqrstxyz'
         assert all(len(batch)<=2 and sum(map(len,batch))<=12 and max(map(len,batch))<=8 for batch in received)
     finally:server.shutdown();thread.join()
+
+
+def test_llm_per_call_output_cap_is_sent_to_provider(endpoint,monkeypatch):
+    import gsm.adapters.llm as module
+    sent=[]
+    def post(url,payload,*args,**kwargs):
+        sent.append(payload['max_tokens']);return {'choices':[{'message':{'content':'{}'},'finish_reason':'stop'}]}
+    monkeypatch.setattr(module,'post_json',post)
+    model=LLM('https://example.invalid','test','dummy',max_tokens=16384)
+    model.complete('x',max_tokens=300);model.complete('x',max_tokens=20000)
+    assert sent==[300,16384]
