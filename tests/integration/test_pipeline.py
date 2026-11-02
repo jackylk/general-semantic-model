@@ -75,3 +75,21 @@ def test_pipeline_retry_reuses_extracted_batch_after_review_failure(build_env,mo
         assert changed.value.code=='PIPELINE_VERSION_CHANGED'
     app.tasks.retry(p,kb,task['id']);second=app.execute_task(kb,task['id'])
     assert second['status']=='succeeded' and counts=={'extract':1,'review':2}
+
+
+def test_pipeline_stops_before_third_batch_when_many_candidates_never_pass(tmp_path,monkeypatch):
+    from gsm.errors import ProductError
+    root=tmp_path/'kb';info=initialize_kb(root,'preflight guard');app=Application(info['roles']['producer']['credentials']);kb=info['kb_id'];dv=app.build.submit_domain(app.principal,kb,DOMAIN);sources=[];counts={'extract':0}
+    for n in range(3):
+        file=root/'documents'/f'{n}.txt';file.write_text('设备 A 序号 001。');sources.append(app.sources.import_file(app.principal,kb,file.name)['id'])
+    class Model:
+        model='test';base_url='https://test.invalid'
+        def complete(self,prompt,**kwargs):
+            data=json.loads(prompt)
+            if data.get('task')=='check_record_support':return Completion({'reviews':[{'id':r['id'],'supported':False,'reason':'synthetic unsupported'} for r in data['records']]},'test',{})
+            counts['extract']+=1;block=data['untrusted_source_blocks'][0]['block_id']
+            return Completion({'candidates':[{'kind':'object','local_id':f'o{i}','type_id':'device','identity':{'serial':'001'},'evidence':[{'block_id':block,'quote':'设备 A 序号 001'}]} for i in range(10)]},'test',{})
+    monkeypatch.setattr(app,'llm',lambda:Model())
+    task=app.tasks.submit(app.principal,kb,'pipeline',{'domain_version_id':dv,'source_version_ids':sources},'guard');result=app.execute_task(kb,task['id'])
+    assert result['status']=='failed' and result['error']['code']=='PIPELINE_NO_SUPPORTED_PROGRESS'
+    assert counts['extract']==2 and len(result['checkpoint']['completed_batches'])==2

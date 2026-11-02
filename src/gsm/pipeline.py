@@ -65,6 +65,9 @@ def run(app,kb_id,task_id,payload,checkpoint):
             for key,value in values.items():
                 if isinstance(value,int):state['usage'][key]=state['usage'].get(key,0)+value
         state['completed_batches'].append(index);state.pop('pending_batch',None);save('reviewed')
+        if len(state['completed_batches'])>=2 and len(state['candidate_ids'])>=20 and not state['approved_record_ids']:
+            state['status']='needs_domain_correction';save('needs_domain_correction')
+            raise ProductError('PIPELINE_NO_SUPPORTED_PROGRESS','连续批次产生多条候选但无通过项，已停止以避免无效Token消耗；请限额预览并修正领域/证据问题，不得放宽产品门禁')
     with app.store.transaction(p,kb_id) as conn:
         rows=conn.execute('SELECT id,kind,payload FROM records WHERE kb_id=%s AND id=ANY(%s::uuid[])',(kb_id,state['approved_record_ids'])).fetchall()
     # Keep only references whose object records have themselves passed support review.

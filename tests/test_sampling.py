@@ -19,3 +19,14 @@ def test_sampling_marks_excerpt_and_never_drops_a_source_silently():
     assert len(samples)==6 and all(b['text_is_excerpt'] for b in samples)
     assert sum(len(b['text']) for b in samples)<=24000
     with pytest.raises(ProductError):domain_samples(blocks,max_blocks=3)
+
+
+def test_extraction_preview_is_bounded_and_keeps_complete_selected_blocks():
+    from gsm.sampling import extraction_samples
+    blocks=[{'source_version_id':s,'block_id':f'{s}-{n}','text':str(n)*100,'locator':{}} for s in ('a','b') for n in range(10)]
+    selected,summary=extraction_samples(blocks,1200)
+    assert {b['source_version_id'] for b in selected}=={'a','b'}
+    assert sum(len(b['text']) for b in selected)<=1200
+    original={b['block_id']:b for b in blocks}
+    assert all(b['text']==original[b['block_id']]['text'] for b in selected)
+    assert len(summary)==2

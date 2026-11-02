@@ -42,3 +42,5 @@
 ## 共用目录新版主路径
 
 以docs/shared-kb-workflow.md为准：产品init-kb已创建空知识库，第二、第三窗口共用根目录。建库优先start_pipeline处理完整来源集合，不由客户端逐条填事实或手写Wiki。它自动分批、持久化抽取结果、做模型语义支持复核并构建多页Wiki；不支持/需确认记录保留为排除项，不自动确认。get_task_status用于轻量轮询，get_task只在需要完整结果时调用。获得build_id后preview_build检查，获授权再publish。产品负责releases/、wiki/和CURRENT.json文件，不在客户端复制输出冒充产品产物。
+
+大资料全量构建前，先调用preview_extraction(sample_chars=12000)做来源均衡、完整块的限额预览；这不是全文覆盖或验收通过。检查合格候选、身份、条件及证据错误，再修正领域定义。不能为让预览通过而删除真实必需条件或编造条件值。连续两批产生至少20条候选却没有任何获支持记录时，start_pipeline会以PIPELINE_NO_SUPPORTED_PROGRESS提前停止并保留检查点，避免盲目消耗Token；应回到限额预览和领域/证据诊断，不反复重试同一错误。

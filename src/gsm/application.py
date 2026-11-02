@@ -152,9 +152,15 @@ class Application:
             if checkpoint.get('result'):return checkpoint
             domain_id=payload['domain_version_id'];domain=self.build.get_domain(self.principal,kb_id,domain_id)
             blocks=self.blocks(kb_id,payload['source_version_ids'])
-            if sum(len(b['text']) for b in blocks)>100000:
-                raise ProductError('SAMPLE_TOO_LARGE','首版单次预览限 10 万字符，请选择更小的样本批次')
-            return self.extract_candidates(kb_id,domain_id,blocks,self.llm(),focus=payload.get('focus'))
+            summary=None
+            if payload.get('sample_chars') is not None:
+                from .sampling import extraction_samples
+                blocks,summary=extraction_samples(blocks,payload['sample_chars'])
+            elif sum(len(b['text']) for b in blocks)>100000:
+                raise ProductError('SAMPLE_TOO_LARGE','单次预览限10万字符；可设置sample_chars进行限额预览')
+            result=self.extract_candidates(kb_id,domain_id,blocks,self.llm(),focus=payload.get('focus'))
+            if summary is not None:result.update(sample_summary=summary,coverage='bounded_preview_not_full_source')
+            return result
         def revalidate(payload,checkpoint):
             if checkpoint.get('result'):return checkpoint
             return {'result':self.build.revalidate(self.principal,kb_id,payload['domain_version_id'],payload['candidate_ids']),'model':None,'usage':{}}

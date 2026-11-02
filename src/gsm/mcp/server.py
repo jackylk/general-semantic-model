@@ -140,8 +140,11 @@ def create_server(app:Application):
         return app.tasks.submit(p,kb_id,'pipeline',{'domain_version_id':domain_version_id,'source_version_ids':source_version_ids,'batch_chars':batch_chars,'focus':focus},idempotency_key)
 
     @tool
-    def preview_extraction(kb_id:str,domain_version_id:str,source_version_ids:list[str],idempotency_key:str,focus:str|None=None)->dict:
+    def preview_extraction(kb_id:str,domain_version_id:str,source_version_ids:list[str],idempotency_key:str,focus:str|None=None,sample_chars:int|None=None)->dict:
         payload={'domain_version_id':domain_version_id,'source_version_ids':source_version_ids}
+        if sample_chars is not None:
+            if not 1000<=sample_chars<=80000:raise ProductError('INVALID_SAMPLE_SIZE','预览正文预算1000–80000字符')
+            payload['sample_chars']=sample_chars
         if focus is not None:
             if not focus.strip() or len(focus)>4000:raise ProductError('INVALID_FOCUS','抽取重点必须为非空文本且不超过4000字符')
             payload['focus']=focus

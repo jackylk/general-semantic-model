@@ -692,6 +692,18 @@
           ],
           "default": null,
           "title": "Focus"
+        },
+        "sample_chars": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sample Chars"
         }
       },
       "required": [
