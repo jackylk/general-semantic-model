@@ -1,3 +1,4 @@
+from gsm.observability import timed
 import math
 from .http import post_json
 from gsm.errors import ProductError
@@ -10,6 +11,7 @@ class Embedding:
         self.base_url=base_url.rstrip('/');self.model=model;self.dimensions=dimensions
         self.batch_size=batch_size;self.max_text_chars=max_text_chars;self.max_batch_chars=max_batch_chars
 
+    @timed('embedding.request')
     def _request(self,texts):
         try:data=post_json(self.base_url+'/embeddings',{'model':self.model,'input':texts},timeout=60)
         except ProductError as error:
@@ -23,6 +25,7 @@ class Embedding:
             raise ProductError('INVALID_EMBEDDING','向量批次、维数或有限非零数值校验失败') from None
         return vectors
 
+    @timed('embedding.total')
     def embed(self,texts):
         if not texts:return []
         if any(not isinstance(t,str) or not t.strip() for t in texts):raise ProductError('INVALID_EMBEDDING_INPUT','向量输入必须是非空文本')

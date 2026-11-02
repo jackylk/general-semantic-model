@@ -1,4 +1,6 @@
 import json
+from time import perf_counter
+from .observability import timed
 from .search import QueryService
 from .releases import ReleaseService
 from .errors import ProductError
@@ -9,7 +11,9 @@ class RetrievalService:
         self.mode=mode
         self.store=store;self.llm=llm;self.max_rounds=max_rounds;self.max_tokens=max_tokens
 
+    @timed('retrieval.total')
     def retrieve(self,principal,kb_id,release_id,question):
+        started=perf_counter()
         query=QueryService(self.store);sources=ReleaseService(self.store)
         with self.store.transaction(principal,kb_id) as conn: query.release(conn,kb_id,release_id)
         history=[];trace=[];read_evidence=set();tokens=0
@@ -24,11 +28,13 @@ class RetrievalService:
             input_bound=len(prompt.encode('utf-8'))+len(system.encode('utf-8'))+256
             remaining=self.max_tokens-tokens-input_bound
             if remaining<256:raise ProductError('RETRIEVAL_BUDGET','剩余预算不足以发送检索上下文')
+            model_started=perf_counter()
             response=self.llm.complete(prompt,system=system,max_tokens=min(16384,remaining))
+            model_ms=(perf_counter()-model_started)*1000
             tokens+=response.usage.get('total_tokens',0)
             if tokens>self.max_tokens: raise ProductError('RETRIEVAL_BUDGET','检索 Token 预算耗尽')
             plan=response.data;action=plan.get('action');args=plan.get('args',{})
-            entry={'plan':plan,'executed':False,'usage':response.usage};trace.append(entry)
+            entry={'plan':plan,'executed':False,'usage':response.usage,'model_ms':round(model_ms,3)};trace.append(entry)
             if action=='finish':
                 citations=plan.get('citations',[]);status=plan.get('status')
                 if not isinstance(citations,list) or any(c not in read_evidence for c in citations):
@@ -37,11 +43,12 @@ class RetrievalService:
                 if status not in ('supported','insufficient') or (status=='supported' and not citations):
                     history.append({'plan':plan,'error':'支持性结论必须有已读取证据；否则 status 必须为 insufficient。'})
                     continue
-                return {'answer':plan.get('answer',''),'status':status,'citations':citations,'kb_id':kb_id,'release_id':release_id,'trace':trace,'total_tokens':tokens}
+                return {'answer':plan.get('answer',''),'status':status,'citations':citations,'kb_id':kb_id,'release_id':release_id,'trace':trace,'total_tokens':tokens,'elapsed_ms':round((perf_counter()-started)*1000,3)}
             allowed={'search':{'query','limit'},'query_records':{'kind','subject','predicate','conditions','limit'},'query_paths':{'start','target','max_depth','limit'},'read_evidence':{'evidence_id'}}
             if self.mode=='baseline':allowed={k:v for k,v in allowed.items() if k in ('search','read_evidence')}
             if action not in allowed or not isinstance(args,dict) or set(args)-allowed[action]:
                 raise ProductError('INVALID_TOOL_PLAN','检索计划包含未授权工具或参数')
+            tool_started=perf_counter()
             try:
                 if action=='search': result=(query.baseline_search if self.mode=='baseline' else query.search)(principal,kb_id,release_id,**args)
                 elif action=='query_records': result=query.records(principal,kb_id,release_id,**args)
@@ -52,5 +59,6 @@ class RetrievalService:
                 entry.update(executed=True,result=result)
             except ProductError as error:
                 result=error.as_dict();entry['error']=result
+            entry['tool_ms']=round((perf_counter()-tool_started)*1000,3)
             history.append({'plan':plan,'result':result})
         raise ProductError('RETRIEVAL_BUDGET','检索轮数预算耗尽')

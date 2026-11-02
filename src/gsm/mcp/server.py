@@ -10,6 +10,7 @@ from gsm.search import QueryService
 from gsm.review import ReviewService
 from gsm.retrieval import RetrievalService
 from gsm.errors import ProductError
+from gsm.observability import phase,SAFE
 
 
 def create_server(app:Application):
@@ -19,7 +20,8 @@ def create_server(app:Application):
     def tool(fn):
         @functools.wraps(fn)
         def guarded(*args,**kwargs):
-            try:return fn(*args,**kwargs)
+            try:
+                with phase('mcp.'+fn.__name__,{k:v for k,v in kwargs.items() if k in SAFE}):return fn(*args,**kwargs)
             except ProductError as error:return {'error':error.as_dict()}
             except psycopg.errors.UniqueViolation:return {'error':{'code':'ALREADY_EXISTS','message':'对象已存在，请读取或使用新的幂等键','retryable':False}}
             except (psycopg.Error,ValueError,TypeError,KeyError):return {'error':{'code':'INVALID_REQUEST','message':'请求参数、状态或引用不合法','retryable':False}}

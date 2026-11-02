@@ -1,3 +1,4 @@
+from gsm.observability import timed
 from psycopg.types.json import Jsonb
 from .errors import ProductError
 
@@ -9,6 +10,7 @@ class ReleaseService:
         with self.store.transaction(principal,kb_id) as conn:
             return str(conn.execute('INSERT INTO builds(kb_id,record_ids,ready) VALUES(%s,%s,%s) RETURNING id',(kb_id,record_ids,ready)).fetchone()[0])
 
+    @timed('release.publish')
     def publish(self,principal,kb_id,build_id):
         principal.require(kb_id,write=True)
         with self.store.transaction(principal,kb_id) as conn:
@@ -50,6 +52,7 @@ class ReleaseService:
                 raise ProductError('NOT_FOUND','发布版本不存在或无权限')
             conn.execute('UPDATE knowledge_bases SET current_release=%s WHERE id=%s',(release_id,kb_id))
 
+    @timed('evidence.read')
     def read_evidence(self,principal,kb_id,release_id,evidence_id):
         with self.store.transaction(principal,kb_id) as conn:
             release=conn.execute('SELECT manifest FROM releases WHERE kb_id=%s AND id=%s',(kb_id,release_id)).fetchone()

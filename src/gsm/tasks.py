@@ -1,3 +1,4 @@
+from gsm.observability import timed
 from hashlib import sha256
 import json
 from pathlib import Path
@@ -14,6 +15,7 @@ class TaskService:
                 conn.execute(Path('migrations/002_tasks.sql').read_text())
                 conn.execute("INSERT INTO schema_migrations(version) VALUES('002')")
 
+    @timed('task.enqueue')
     def submit(self,principal,kb_id,kind,payload,idempotency_key):
         principal.require(kb_id,write=True)
         if not idempotency_key or len(idempotency_key)>200: raise ProductError('INVALID_KEY','幂等键不能为空且最长 200 字符')

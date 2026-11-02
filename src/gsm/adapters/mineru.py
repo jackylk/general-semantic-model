@@ -1,3 +1,4 @@
+from gsm.observability import timed
 """Local-only MinerU process boundary. Never silently uploads documents."""
 from dataclasses import dataclass
 from pathlib import Path
@@ -16,6 +17,7 @@ class Parser:
     def __init__(self,command='mineru-kit',timeout=300):
         self.command=command;self.timeout=timeout
 
+    @timed('parser.parse')
     def parse(self,path):
         path=Path(path)
         if path.suffix.lower() in ('.txt','.md'):

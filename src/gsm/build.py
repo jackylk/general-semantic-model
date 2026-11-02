@@ -1,3 +1,4 @@
+from gsm.observability import timed
 from typing import Any
 from hashlib import sha256
 from pathlib import Path
@@ -70,6 +71,7 @@ class BuildService:
                 conn.execute(Path('migrations/003_build.sql').read_text())
                 conn.execute("INSERT INTO schema_migrations(version) VALUES('003')")
 
+    @timed('domain.submit')
     def submit_domain(self,principal,kb_id,data):
         principal.require(kb_id,write=True)
         domain=validate_domain(data)
@@ -82,6 +84,7 @@ class BuildService:
             if not row: raise ProductError('NOT_FOUND','领域版本不存在或无权限')
             return validate_domain(row[0])
 
+    @timed('semantic.ingest')
     def ingest(self,principal,kb_id,domain_version_id,raw_candidates):
         principal.require(kb_id,write=True)
         domain=self.get_domain(principal,kb_id,domain_version_id)
@@ -205,6 +208,7 @@ class BuildService:
             AND EXISTS(SELECT 1 FROM evidence_links e JOIN source_blocks b ON b.kb_id=e.kb_id AND b.id=e.block_id JOIN parse_versions p ON p.kb_id=b.kb_id AND p.id=b.parse_version_id
                 WHERE e.kb_id=r.kb_id AND e.record_id=r.id AND NOT EXISTS(SELECT 1 FROM source_withdrawals w WHERE w.kb_id=p.kb_id AND w.source_version_id=p.source_version_id))""",(kb_id,kind,domain_version_id)).fetchall()
 
+    @timed('semantic.revalidate')
     def revalidate(self,principal,kb_id,domain_version_id,candidate_ids):
         principal.require(kb_id,write=True)
         if not 1<=len(candidate_ids)<=200 or len(set(candidate_ids))!=len(candidate_ids):raise ProductError('INVALID_LIMIT','重核验必须选择1–200条不重复候选')
@@ -231,6 +235,7 @@ class BuildService:
         records=[{'id':str(rid),'kind':rkind,'payload':payload} for rid,rkind,payload in rows if (not kind or kind==rkind) and (not conditions or all(payload.get('conditions',{}).get(k)==v for k,v in conditions.items()))]
         return {'build_id':build_id,'preview_only':True,'record_ids':[str(rid) for rid in build[0]],'matching_count':len(records),'records':records[offset:offset+limit],'offset':offset,'manifest':build[2]}
 
+    @timed('build.index_and_wiki')
     def finish(self,principal,kb_id,domain_version_id,record_ids,embed=True):
         from .search import tokenize
         from .adapters.embedding import Embedding

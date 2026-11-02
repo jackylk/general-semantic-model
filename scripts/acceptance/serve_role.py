@@ -1,5 +1,6 @@
 """Test-only authenticated/audited HTTP transport around the public MCP server."""
-import argparse,json,time
+import argparse,json,time,re
+from gsm.observability import phase
 from pathlib import Path
 import uvicorn
 from gsm.application import Application
@@ -13,7 +14,7 @@ class AuditAuth:
         if headers.get(b'authorization',b'').decode()!='Bearer '+self.token:
             await send({'type':'http.response.start','status':401,'headers':[(b'content-type',b'application/json')]})
             return await send({'type':'http.response.body','body':b'{"error":"unauthorized"}'})
-        request=[];response=[]
+        request=[];response=[];started=time.time();clock=time.perf_counter()
         async def audited_receive():
             message=await receive()
             if message['type']=='http.request':request.append(message.get('body',b''))
@@ -21,13 +22,16 @@ class AuditAuth:
         async def audited_send(message):
             if message['type']=='http.response.body':response.append(message.get('body',b''))
             await send(message)
-        try:await self.app(scope,audited_receive,audited_send)
+        correlation=headers.get(b'x-gsm-test-case',b'').decode(errors='replace')
+        metadata={'correlation_id':correlation} if re.fullmatch(r'Q\d{2}',correlation) else {}
+        try:
+            with phase('transport.request',metadata):await self.app(scope,audited_receive,audited_send)
         finally:
             def decoded(chunks):
                 raw=b''.join(chunks).decode(errors='replace')
                 try:return json.loads(raw)
                 except ValueError:return raw
-            with self.log.open('a') as f:f.write(json.dumps({'time':time.time(),'role':self.role,'method':scope['method'],'request':decoded(request),'response':decoded(response)},ensure_ascii=False)+'\n')
+            with self.log.open('a') as f:f.write(json.dumps({'time':time.time(),'started_at':started,'duration_ms':round((time.perf_counter()-clock)*1000,3),'correlation_id':metadata.get('correlation_id'),'role':self.role,'method':scope['method'],'request':decoded(request),'response':decoded(response)},ensure_ascii=False)+'\n')
 
 def main():
     p=argparse.ArgumentParser();p.add_argument('--credentials',required=True);p.add_argument('--token-file',required=True);p.add_argument('--log',required=True);p.add_argument('--port',type=int,required=True);a=p.parse_args()

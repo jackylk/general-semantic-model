@@ -1,3 +1,4 @@
+from gsm.observability import timed,phase
 import json,re
 from .errors import ProductError
 from .adapters.embedding import Embedding
@@ -17,6 +18,7 @@ class QueryService:
         if not row: raise ProductError('NOT_FOUND','发布版本不存在或无权限')
         return str(row[0]),row[1]
 
+    @timed('search.records')
     def records(self,principal,kb_id,release_id,kind=None,subject=None,predicate=None,conditions=None,limit=100,_ids=None):
         if not 1<=limit<=200: raise ProductError('INVALID_LIMIT','limit 必须在 1–200')
         with self.store.transaction(principal,kb_id) as conn:
@@ -34,6 +36,7 @@ class QueryService:
                 if len(result)>=(limit if _ids is None else len(ids)):break
             return result
 
+    @timed('search.graph')
     def paths(self,principal,kb_id,release_id,start,target=None,max_depth=3,limit=20):
         if not 1<=max_depth<=5 or not 1<=limit<=50:raise ProductError('INVALID_LIMIT','图深度必须在 1–5，路径数在 1–50')
         with self.store.transaction(principal,kb_id) as conn:
@@ -52,18 +55,21 @@ class QueryService:
         all_records={r['id']:r for r in self.records(principal,kb_id,release_id,kind='relation',_ids={str(r) for _,_,ids in rows for r in ids})}
         return [{'nodes':nodes,'records':[all_records[str(r)] for r in ids if str(r) in all_records],'release_id':release_id} for _,nodes,ids in rows]
 
+    @timed('search.hybrid')
     def search(self,principal,kb_id,release_id,query,use_vector=True,limit=10):
         if not query.strip() or len(query)>4000 or not 1<=limit<=50: raise ProductError('INVALID_QUERY','检索问题不能为空，最多 4000 字符，limit 1–50')
         query_vector=None
         with self.store.transaction(principal,kb_id) as conn:
             build_id,_=self.release(conn,kb_id,release_id)
             terms=tokenize(query)
-            lexical=conn.execute("SELECT record_id FROM search_documents WHERE kb_id=%s AND build_id=%s AND (tokens @@ plainto_tsquery('simple',%s) OR strpos(text,%s)>0) ORDER BY ts_rank(tokens,plainto_tsquery('simple',%s)) DESC,record_id LIMIT 50",(kb_id,build_id,terms,query,terms)).fetchall()
+            with phase('search.semantic.lexical'):
+                lexical=conn.execute("SELECT record_id FROM search_documents WHERE kb_id=%s AND build_id=%s AND (tokens @@ plainto_tsquery('simple',%s) OR strpos(text,%s)>0) ORDER BY ts_rank(tokens,plainto_tsquery('simple',%s)) DESC,record_id LIMIT 50",(kb_id,build_id,terms,query,terms)).fetchall()
             ranked=[[str(r[0]) for r in lexical]]
             if use_vector:
                 vector=self.embedding.embed([query])[0];query_vector=vector
                 v='['+','.join(map(str,vector))+']'
-                ranked.append([str(r[0]) for r in conn.execute('SELECT record_id FROM search_documents WHERE kb_id=%s AND build_id=%s AND embedding IS NOT NULL ORDER BY embedding <=> %s::vector LIMIT 50',(kb_id,build_id,v)).fetchall()])
+                with phase('search.semantic.vector'):
+                    ranked.append([str(r[0]) for r in conn.execute('SELECT record_id FROM search_documents WHERE kb_id=%s AND build_id=%s AND embedding IS NOT NULL ORDER BY embedding <=> %s::vector LIMIT 50',(kb_id,build_id,v)).fetchall()])
         scores={}
         for ranking in ranked:
             for i,rid in enumerate(ranking):scores[rid]=scores.get(rid,0)+1/(60+i+1)
@@ -79,15 +85,18 @@ class QueryService:
             return manifest.get('wiki',{'text':'','citations':[]})
 
 
+    @timed('search.source')
     def baseline_search(self,principal,kb_id,release_id,query,use_vector=True,limit=10,_vector=None):
         if not query.strip() or len(query)>4000 or not 1<=limit<=50:raise ProductError('INVALID_QUERY','检索参数不合法')
         with self.store.transaction(principal,kb_id) as conn:
             build_id,_=self.release(conn,kb_id,release_id);terms=tokenize(query)
-            rows=conn.execute("SELECT block_id,text FROM source_search_documents WHERE kb_id=%s AND build_id=%s AND (tokens @@ plainto_tsquery('simple',%s) OR strpos(text,%s)>0) ORDER BY ts_rank(tokens,plainto_tsquery('simple',%s)) DESC,block_id LIMIT 50",(kb_id,build_id,terms,query,terms)).fetchall()
+            with phase('search.source.lexical'):
+                rows=conn.execute("SELECT block_id,text FROM source_search_documents WHERE kb_id=%s AND build_id=%s AND (tokens @@ plainto_tsquery('simple',%s) OR strpos(text,%s)>0) ORDER BY ts_rank(tokens,plainto_tsquery('simple',%s)) DESC,block_id LIMIT 50",(kb_id,build_id,terms,query,terms)).fetchall()
             rankings=[[str(r[0]) for r in rows]];texts={str(r[0]):r[1] for r in rows}
             if use_vector:
                 vector=_vector if _vector is not None else self.embedding.embed([query])[0];v='['+','.join(map(str,vector))+']'
-                rows=conn.execute('SELECT block_id,text FROM source_search_documents WHERE kb_id=%s AND build_id=%s AND embedding IS NOT NULL ORDER BY embedding <=> %s::vector LIMIT 50',(kb_id,build_id,v)).fetchall()
+                with phase('search.source.vector'):
+                    rows=conn.execute('SELECT block_id,text FROM source_search_documents WHERE kb_id=%s AND build_id=%s AND embedding IS NOT NULL ORDER BY embedding <=> %s::vector LIMIT 50',(kb_id,build_id,v)).fetchall()
                 rankings.append([str(r[0]) for r in rows]);texts.update({str(r[0]):r[1] for r in rows})
             scores={}
             for ranking in rankings:

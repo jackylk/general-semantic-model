@@ -1,3 +1,4 @@
+from gsm.observability import timed
 from hashlib import sha256
 from pathlib import Path
 from psycopg.types.json import Jsonb
@@ -7,6 +8,7 @@ class SourceService:
     def __init__(self, store):
         self.store=store
 
+    @timed('source.import')
     def import_file(self, principal,kb_id,relative_path):
         principal.require(kb_id,write=True)
         if self.store.settings.source_root is None:raise ProductError('SOURCE_NOT_CONFIGURED','尚未配置文档收件入口，请先完成工作区初始化并由用户提供资料')
@@ -26,6 +28,7 @@ class SourceService:
                 row=conn.execute('SELECT id FROM source_versions WHERE kb_id=%s AND source_key=%s AND sha256=%s',(kb_id,relative_path,digest)).fetchone()
             return {'id':str(row[0]),'sha256':digest,'byte_count':len(data)}
 
+    @timed('source.persist_parse')
     def save_parse(self,principal,kb_id,source_version_id,parser_version,blocks,raw=None):
         principal.require(kb_id,write=True)
         with self.store.transaction(principal,kb_id) as conn:

@@ -12,6 +12,7 @@ from .worker import Worker
 from .adapters.mineru import Parser
 from .adapters.llm import LLM
 from .errors import ProductError
+from .observability import timed
 
 class Application:
     def __init__(self,credential_path):
@@ -28,6 +29,7 @@ class Application:
         cfg={**dotenv_values('.env'),**os.environ}
         return LLM.from_env_file(Path(cfg.get('GSM_LLM_ENV_FILE',str(Path.home()/'code/.env'))).expanduser(),cfg.get('GSM_LLM_BASE_URL','https://api.deepseek.com'),cfg.get('GSM_LLM_MODEL','deepseek-flash'))
 
+    @timed('source.parse_or_cache')
     def parse_source(self,kb_id,source_version_id):
         self.principal.require(kb_id,write=True)
         with self.store.transaction(self.principal,kb_id) as conn:
@@ -42,15 +44,17 @@ class Application:
             parsed=Parser(command=command).parse(path)
         return self.sources.save_parse(self.principal,kb_id,source_version_id,parsed.parser_version,parsed.blocks,raw=parsed.raw)['id']
 
+    @timed('source.load_blocks')
     def blocks(self,kb_id,source_version_ids):
         result=[]
         for source_id in source_version_ids:
             parse_id=self.parse_source(kb_id,source_id)
             with self.store.transaction(self.principal,kb_id) as conn:
                 rows=conn.execute('SELECT id,text,locator FROM source_blocks WHERE kb_id=%s AND parse_version_id=%s ORDER BY ordinal',(kb_id,parse_id)).fetchall()
-            result.extend({'block_id':str(r[0]),'text':r[1],'locator':r[2]} for r in rows)
+            result.extend({'source_version_id':source_id,'block_id':str(r[0]),'text':r[1],'locator':r[2]} for r in rows)
         return result
 
+    @timed('extraction.validate_and_repair')
     def extract_candidates(self,kb_id,domain_id,blocks,llm):
         domain=self.build.get_domain(self.principal,kb_id,domain_id)
         aliases={f'B{i+1:04d}':block['block_id'] for i,block in enumerate(blocks)}
@@ -107,6 +111,7 @@ class Application:
             prompt['repair']={'instruction':'按具体错误修正整个候选批次。不能补造证据或身份；资料无法确定的保留未决。','previous_candidates':raw,'errors':invalid}
         return {'result':result,'usage':usage,'model':response.model,'attempts':len(attempts),'attempt_log':attempts,'coverage':'empty' if not result['candidates'] else 'candidates_returned'}
 
+    @timed('task.execute')
     def execute_task(self,kb_id,task_id):
         def extract(payload,checkpoint):
             if checkpoint.get('result'):return checkpoint
@@ -123,11 +128,13 @@ class Application:
         def analyze(payload,checkpoint):
             blocks=self.blocks(kb_id,payload['source_version_ids'])
             from .domain import DomainDefinition,validate_domain
-            response=self.llm().complete(json.dumps({'task':'依据用途、问题与资料建议领域定义。返回 JSON {"definition":符合schema的领域定义,"questions":需要用户选择的业务歧义列表，每项包含问题、少量选项、推荐和理由}。不要要求用户填写schema。','purpose':payload['purpose'],'questions':payload['questions'],'schema':DomainDefinition.model_json_schema(),'untrusted_sample_blocks':blocks[:20]},ensure_ascii=False))
+            from .sampling import domain_samples
+            sampled,sample_summary=domain_samples(blocks)
+            response=self.llm().complete(json.dumps({'task':'依据用途、问题与资料建议领域定义。返回 JSON {"definition":符合schema的领域定义,"questions":需要用户选择的业务歧义列表，每项包含问题、少量选项、推荐和理由}。不要要求用户填写schema。','purpose':payload['purpose'],'questions':payload['questions'],'schema':DomainDefinition.model_json_schema(),'untrusted_sample_blocks':sampled},ensure_ascii=False))
             proposal=response.data
             try:validate_domain(proposal.get('definition',{}));proposal['validation']={'valid':True}
             except ProductError as error:proposal['validation']={'valid':False,'error':error.as_dict()}
-            return {'proposal':proposal,'usage':response.usage,'model':response.model}
+            return {'proposal':proposal,'usage':response.usage,'model':response.model,'sample_summary':sample_summary}
         def evaluate(payload,checkpoint):
             from .evaluation import EvaluationService
             return EvaluationService(self.store,self.llm()).run(self.principal,kb_id,payload['release_id'],payload['dataset'],payload['mode'])
