@@ -112,3 +112,13 @@ python3 /Users/jacky/code/gsm-automotive-validation-20261102/consumer/start-code
 这个额外OS隔离是汽车验证入口配置；普通init-workspaces启动器仍是workspace-write，不要把直接打开文件夹等同于OS隔离，也不要把实验配置当作已交付的生产多租户安全。依据：[OpenAI官方权限与沙箱说明](https://learn.chatgpt.com/docs/agent-approvals-security)。
 
 此前 `/Users/jacky/code/gsm-knowledge-workspaces-20261102` 保留给用户空白试用，未预置汽车文档。历史实验材料已从产品runtime搬到上述汽车目录的control归档，不改写历史日志中的原路径。归档脚本输出也改到实验目录；烟测在系统临时目录生成资料，不再写产品的知识库目录或自动改写已提交测试报告。
+
+## 共用目录初始化（新流程，尚未完整验收）
+
+```bash
+uv run --frozen python -m gsm.cli init-kb --root ../automotive-kb --name 汽车知识库
+```
+
+该命令由产品执行，不调用Codex或LLM：迁移通用数据库结构、登记空知识库、创建documents/domain/wiki/releases/reports空目录。未导入任何汽车知识。两角色都以automotive-kb为根目录，分别使用start-producer.py与start-consumer.py；producer是业务角色名，内部历史开发者API身份暂保留developer以兼容合同。
+
+此入口目前完成初始化和共用目录骨架。共用目录下的凭据隔离、完整Pipeline与发布产物导出尚未完成，不应替代已验证OS隔离的旧汽车测试入口开展正式验收。未自动迁移或覆盖旧知识库。

@@ -9,12 +9,16 @@ def main():
     parser=argparse.ArgumentParser(prog='gsm')
     commands=parser.add_subparsers(dest='command',required=True)
     commands.add_parser('migrate')
+    shared=commands.add_parser('init-kb');shared.add_argument('--root',required=True);shared.add_argument('--name',default='我的知识库')
     init=commands.add_parser('init-workspaces');init.add_argument('--root',required=True)
     for name in ('serve','worker'):
         command=commands.add_parser(name);command.add_argument('--credentials',required=True)
         if name=='worker':
             command.add_argument('--once');command.add_argument('--kb-id')
     args=parser.parse_args()
+    if args.command=='init-kb':
+        from .workspaces import initialize_kb
+        print(json.dumps(initialize_kb(Path(args.root),args.name),ensure_ascii=False,indent=2));return
     if args.command=='init-workspaces':
         from .workspaces import provision
         print(json.dumps(provision(Path(args.root)),ensure_ascii=False,indent=2));return
