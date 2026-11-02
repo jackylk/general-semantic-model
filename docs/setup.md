@@ -35,7 +35,7 @@ uv run --frozen python -m gsm.cli init-workspaces --root ../gsm-knowledge-worksp
 uv run --frozen python -m gsm.cli worker --credentials ../gsm-knowledge-workspaces/developer/credentials.json
 ```
 
-init-workspaces 拒绝覆盖非空目录。第二、第三窗口分别打开 runtime/workspaces/developer 和 consumer。这是实验数据，未提交 Git。第二窗口说“我要开始创建知识库”；第三窗口等待开发者提供发布版。工作区含项目级 MCP 配置，不修改用户全局 Codex 配置。客户端可能要求用户信任新工作区；这是客户端设置，不代表产品批准写入。
+init-workspaces 拒绝覆盖非空目录，也拒绝产品目录内的目标（含符号链接）。第二、第三窗口分别打开 ../gsm-knowledge-workspaces/developer 和 consumer。知识库工作目录与产品软件目录分离，资料和领域资产不提交产品 Git。第二窗口说“我要开始创建知识库”；第三窗口等待开发者提供发布版。工作区含项目级 MCP 配置，不修改用户全局 Codex 配置。客户端可能要求用户信任新工作区；这是客户端设置，不代表产品批准写入。
 
 复现本地 MinerU flash 运行环境（源码只读，不在源码目录安装或修改）：
 
@@ -50,8 +50,8 @@ uv run --frozen python scripts/setup_mineru.py --source ../MinerU
 本机检查发现尚未信任工作区时，`codex mcp list` 不会加载项目配置。可改用下列启动器，它只为新会话显式传入对应 MCP，不修改全局设置：
 
 ```bash
-python3 runtime/workspaces/developer/start-codex.py
-python3 runtime/workspaces/consumer/start-codex.py
+python3 ../gsm-knowledge-workspaces/developer/start-codex.py
+python3 ../gsm-knowledge-workspaces/consumer/start-codex.py
 ```
 
 CLI 会话启动后，开发者输入“我要开始创建知识库”。图形界面方式仍需按客户端提示信任对应工作区，再检查 MCP 连接。已通过独立原生 Codex CLI 的引导、汽车建库和消费预验收，见 docs/testing/three-codex-results.md；图形客户端体验仍待用户实际确认。
@@ -82,3 +82,33 @@ shasum -a 256 runtime/tokenizers/deepseek-v41/tokenizer.json
 预期 SHA-256 为 `c90dfa01249db1be4245780a052ede752e1361c612ac6d08e2bdada7d599476b`，6367257 字节。核对后在本地 `.env` 配置 `.env.example` 中两项 GSM_TOKENIZER 参数并重启服务。不要给不匹配的服务模型配置此文件。模型控制符不会把不可信资料中的同名文本当作单个控制 token。
 
 依据：[官方 token 用量说明](https://api-docs.deepseek.com/quick_start/token_usage/)、[模型信息](https://api-docs.deepseek.com/quick_start/pricing/)、[官方分词器使用说明](https://github.com/deepseek-ai/deepseek-recipe/blob/main/docs/tokenizer.md)。
+
+
+## 产品、知识库与汽车验证目录
+
+产品目录只保存通用代码、依赖和产品文档。每个知识库使用独立外部工作目录；初始化拒绝把开发者/使用者工作区放到产品内部。默认原件存储为 `~/.local/share/general-semantic-model/files/<kb_id>`，本机通过 `GSM_FILE_ROOT` 配为 `/Users/jacky/code/gsm-runtime-data/files`；不要把模型依赖目录和知识库原件仓库混在一起。未配置来源时没有默认收件目录，具体资料由用户提供。
+
+本机汽车独立验证目录为 `/Users/jacky/code/gsm-automotive-validation-20261102`：
+
+```text
+general-semantic-model/                 # 第一窗口：产品开发
+../gsm-automotive-validation-20261102/
+    developer/                          # 第二窗口：文档、领域包、建库结果
+    consumer/                           # 第三窗口：只读问答、测试与反馈
+    control/                            # 第一窗口私有：基准、服务、证据、计时
+    artifacts/                          # 复现归档，不进入产品Git
+../gsm-runtime-data/files/<kb_id>/       # 外部原件存储，按KB隔离
+```
+
+汽车测试分别运行：
+
+```bash
+python3 /Users/jacky/code/gsm-automotive-validation-20261102/developer/start-codex.py
+python3 /Users/jacky/code/gsm-automotive-validation-20261102/consumer/start-codex.py
+```
+
+这些汽车启动器使用独立 Codex 会话状态、签名KB作用域、分别鉴权的HTTP MCP和外层 macOS OS 沙箱。产品、私有基准及另一角色目录不可读写；本角色工作区可写。第三窗口API不提供建库和发布写能力。原生内部沙箱仅在该外层OS沙箱确已启用时关闭，不能单独复制关闭内部沙箱的参数运行。两个原生Codex会话均实测产品写入返回PermissionError，而本角色工作区写入及公开MCP读取成功；另有22项协议/OS边界检查通过。
+
+这个额外OS隔离是汽车验证入口配置；普通init-workspaces启动器仍是workspace-write，不要把直接打开文件夹等同于OS隔离，也不要把实验配置当作已交付的生产多租户安全。依据：[OpenAI官方权限与沙箱说明](https://learn.chatgpt.com/docs/agent-approvals-security)。
+
+此前 `/Users/jacky/code/gsm-knowledge-workspaces-20261102` 保留给用户空白试用，未预置汽车文档。历史实验材料已从产品runtime搬到上述汽车目录的control归档，不改写历史日志中的原路径。归档脚本输出也改到实验目录；烟测在系统临时目录生成资料，不再写产品的知识库目录或自动改写已提交测试报告。

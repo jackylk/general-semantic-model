@@ -1,5 +1,5 @@
 """Live synthetic smoke using ONLY public MCP calls; not domain acceptance."""
-import argparse,asyncio,json,subprocess,sys
+import argparse,asyncio,json,subprocess,sys,tempfile
 from pathlib import Path
 from uuid import uuid4
 import yaml
@@ -18,9 +18,9 @@ def unpack(result):
 
 
 async def main(pdf=False):
-    kb=str(uuid4());run=ROOT/'runtime'/('smoke-'+kb);run.mkdir(parents=True)
-    profile=run/'developer.json';write_credentials(profile,'developer',[kb],ROOT/'runtime/imports')
-    inputs=ROOT/'runtime/imports';inputs.mkdir(parents=True,exist_ok=True)
+    kb=str(uuid4());run=Path(tempfile.mkdtemp(prefix='gsm-smoke-'+kb+'-'))
+    inputs=run/'documents';inputs.mkdir()
+    profile=run/'developer.json';write_credentials(profile,'developer',[kb],inputs)
     source=inputs/('smoke-'+kb+('.pdf' if pdf else '.txt'))
     if pdf:
         generator='from reportlab.pdfgen.canvas import Canvas;import sys;c=Canvas(sys.argv[1]);c.drawString(50,780,"Synthetic knowledge test; not a real company policy.");c.drawString(50,750,"Employee John has staff ID E001.");c.drawString(50,720,"When the applicable region is Shanghai, monthly allowance is 100.50 CNY.");c.save()'
@@ -57,8 +57,7 @@ async def main(pdf=False):
             answer=await call('retrieve',kb_id=kb,release_id=release['release_id'],question='工号 E001 的员工适用上海地区时月度补贴是多少？请保留单位和地区条件。')
             report={'scope':'live model, synthetic source, public MCP smoke; not independent user/domain acceptance','kb_id':kb,'release_id':release['release_id'],'source_format':'pdf' if pdf else 'text','candidate_count':len(candidates),'search_hits':len(results['results']),'answer':answer}
             (run/'report.json').write_text(json.dumps(report,ensure_ascii=False,indent=2))
-            (ROOT/('docs/validation/live-pdf-mcp-smoke.json' if pdf else 'docs/validation/live-mcp-smoke.json')).write_text(json.dumps(report,ensure_ascii=False,indent=2)+'\n')
-            print(json.dumps({'status':answer['status'],'source_format':'pdf' if pdf else 'text','candidate_count':len(candidates),'search_hits':len(results['results']),'answer':answer['answer'],'citations':answer['citations']},ensure_ascii=False))
+            print(json.dumps({'artifacts':str(run),'status':answer['status'],'source_format':'pdf' if pdf else 'text','candidate_count':len(candidates),'search_hits':len(results['results']),'answer':answer['answer'],'citations':answer['citations']},ensure_ascii=False))
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser();parser.add_argument('--pdf',action='store_true');args=parser.parse_args();asyncio.run(main(args.pdf))

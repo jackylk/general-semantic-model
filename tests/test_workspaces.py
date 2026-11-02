@@ -38,3 +38,24 @@ def test_profile_without_documents_does_not_inherit_global_imports(tmp_path):
     assert app.store.settings.source_root is None
     with pytest.raises(ProductError) as exc:app.sources.import_file(app.principal,kb,'anything.txt')
     assert exc.value.code=='SOURCE_NOT_CONFIGURED'
+
+
+def test_workspace_inside_product_is_rejected_before_creating_files():
+    from uuid import uuid4
+    import pytest
+    from gsm.errors import ProductError
+    destination=Path.cwd()/'runtime'/('blocked-workspace-'+str(uuid4()))
+    with pytest.raises(ProductError) as exc:provision(destination)
+    assert exc.value.code=='INVALID_WORKSPACE_ROOT'
+    assert not destination.exists()
+
+
+def test_workspace_cannot_use_symlink_to_put_assets_inside_product(tmp_path):
+    from uuid import uuid4
+    import pytest
+    from gsm.errors import ProductError
+    alias=tmp_path/'product-alias';alias.symlink_to(Path.cwd(),target_is_directory=True)
+    destination=alias/'runtime'/('blocked-workspace-'+str(uuid4()))
+    with pytest.raises(ProductError) as exc:provision(destination)
+    assert exc.value.code=='INVALID_WORKSPACE_ROOT'
+    assert not destination.exists()

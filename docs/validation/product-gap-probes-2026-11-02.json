@@ -1,0 +1,32 @@
+{
+  "method": "C1 controlled synthetic reproduction in two fresh isolated test KBs, no LLM/Embedding calls, existing car KBs untouched. These are defect observations, not passing acceptance tests.",
+  "results": [
+    {
+      "probe": "reversed_relation_with_real_quote",
+      "observed_status": "verified",
+      "issues": []
+    },
+    {
+      "probe": "publish_relation_without_object_records",
+      "published": true,
+      "published_record_kinds": [
+        "relation"
+      ]
+    },
+    {
+      "probe": "wrong_identity_and_invalid_validity_with_real_quote",
+      "observed_status": "verified",
+      "issues": []
+    },
+    {
+      "probe": "new_build_after_one_of_two_sources_withdrawn",
+      "published": true,
+      "wiki_citations": 2,
+      "unreadable_wiki_citations": 1,
+      "citation_errors": [
+        "NOT_FOUND"
+      ],
+      "withdrawn_source_blocks_in_new_index": 1
+    }
+  ]
+}

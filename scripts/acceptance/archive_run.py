@@ -3,7 +3,7 @@ import json,shutil,hashlib
 from pathlib import Path
 from dotenv import dotenv_values
 root=Path.cwd();r=Path((root/'runtime/acceptance-root.txt').read_text());c=r/'control'
-out=root/'runtime/acceptance-artifacts/2026-11-02-three-codex';out.mkdir(parents=True,exist_ok=True)
+out=r/'artifacts/2026-11-02-three-codex';out.mkdir(parents=True,exist_ok=True)
 control_names=['latest-release-audit.json','final-results.json','environment.json','run.json','gold.json','questions.json','boundary-results.json','worker-restart-probe.json','embedding-bounded-stress.json','answer-evidence-audit.json','answer-evidence-reads.json','role-trace-audit.json','lifecycle-audit.json','developer.sb','consumer.sb']
 files=[(c/name,Path('control')/name) for name in control_names if (c/name).is_file()]
 files +=[(p,Path('control')/p.name) for pattern in ['*-phase*.jsonl','*-phase*.stderr','*-phase*-prompt.txt','*-mcp.jsonl','*-server.log','worker.log'] for p in c.glob(pattern)]

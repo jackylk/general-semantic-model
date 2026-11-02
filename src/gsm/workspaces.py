@@ -5,7 +5,9 @@ from .errors import ProductError
 
 
 def provision(root:Path):
-    root=root.resolve();product=Path.cwd();kb_id=str(uuid4())
+    root=root.resolve();product=Path.cwd().resolve();kb_id=str(uuid4())
+    if root.is_relative_to(product):
+        raise ProductError('INVALID_WORKSPACE_ROOT','知识库工作区必须位于产品目录之外，请使用独立目录')
     if root.exists() and any(root.iterdir()):raise ProductError('WORKSPACE_EXISTS','工作区非空，拒绝覆盖')
     result={}
     for role,server in [('developer','gsm_developer'),('consumer','gsm_consumer')]:

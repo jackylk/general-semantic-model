@@ -1,0 +1,68 @@
+{
+  "product_code_access": "C2/C3 OS read and write denied when using validated automotive launchers",
+  "workspace_external": true,
+  "source_blob_store_external": true,
+  "role_scope": "separate authenticated MCP endpoints and signed KB scopes; consumer has no build/publish tools",
+  "boundary_checks": {
+    "consumer_write_tools_absent": true,
+    "direct_revalidate_candidates_denied": true,
+    "direct_preview_build_denied": true,
+    "direct_publish_denied": true,
+    "direct_register_source_denied": true,
+    "direct_review_candidates_denied": true,
+    "foreign_kb_denied": true,
+    "invalid_release_denied": true,
+    "invalid_evidence_denied": true,
+    "invalid_task_denied": true,
+    "consumer_token_cannot_access_developer": true,
+    "developer_product_code_read_denied": true,
+    "developer_private_reference_read_denied": true,
+    "developer_consumer_workspace_read_denied": true,
+    "developer_own_workspace_writable": true,
+    "developer_product_write_denied": true,
+    "consumer_product_code_read_denied": true,
+    "consumer_private_reference_read_denied": true,
+    "consumer_developer_workspace_read_denied": true,
+    "consumer_raw_source_read_denied": true,
+    "consumer_own_workspace_writable": true,
+    "consumer_product_write_denied": true
+  },
+  "native_codex_launch_checks": {
+    "developer": {
+      "product_write_denied": true,
+      "product_write_error": "PermissionError",
+      "own_write_allowed": true,
+      "knowledge_base_read": true,
+      "kb_id": "f49b1d46-893f-4d15-b45a-78055ef57cab",
+      "release_id": "8119d7bc-cf93-49e6-bb12-4e3eb081eec9"
+    },
+    "consumer": {
+      "kb_id": "f49b1d46-893f-4d15-b45a-78055ef57cab",
+      "product_write_denied": {
+        "passed": true,
+        "error": "PermissionError",
+        "detail": "[Errno 1] Operation not permitted"
+      },
+      "workspace_write_allowed": {
+        "passed": true,
+        "path": "startup-own-write.txt"
+      },
+      "knowledge_base_read": {
+        "passed": true,
+        "tool": "describe_kb"
+      },
+      "release_id": "8119d7bc-cf93-49e6-bb12-4e3eb081eec9"
+    }
+  },
+  "blob_integrity": {
+    "content_addressed_blob_files": 40,
+    "mismatched_hashes": [],
+    "migration_preserved_blob_hashes": true
+  },
+  "automated_tests": 98,
+  "limitations": [
+    "仅汽车验证启动器具备本次额外OS隔离；直接打开目录不能替代该隔离。",
+    "未完成多页Wiki及产品差距清单中的正确性修复。",
+    "历史实验日志保留原路径，不静默改写。"
+  ]
+}
