@@ -111,6 +111,12 @@ class BuildService:
                 issues=[]
                 def add(code,fatal=True): issues.append({'code':code,'fatal':fatal})
                 payload=c.model_dump(mode='json');payload['domain_version_id']=domain_version_id
+                payload['verification_scope']='structure_location_and_lexical_checks_not_semantic_proof'
+                try:
+                    start=date.fromisoformat(c.valid_from) if c.valid_from else None
+                    end=date.fromisoformat(c.valid_to) if c.valid_to else None
+                    if start and end and start>end:add('INVALID_VALIDITY')
+                except (ValueError,TypeError):add('INVALID_VALIDITY')
                 if c.provenance not in ('source_statement','observation','calculation','inference'): add('INVALID_PROVENANCE')
                 if c.provenance in ('calculation','inference'): add('REVIEW_REQUIRED',False)
                 if c.kind=='object':
@@ -183,6 +189,9 @@ class BuildService:
                 if c.provenance in ('source_statement','observation'):
                     from .grounding import grounded,numbers,quantities
                     quotes='\n'.join(e.quote for e,_ in links)
+                    if c.kind=='object' and c.type_id in types:
+                        for key in types[c.type_id].identity:
+                            if key in c.identity and key in props and not value_issues(c.identity[key],props[key]) and not grounded(c.identity[key],props[key],quotes):add('IDENTITY_NOT_IN_EVIDENCE')
                     for key,value in c.conditions.items():
                         if key in conds and not value_issues(value,conds[key]) and not grounded(value,conds[key],quotes):add('CONDITION_NOT_IN_EVIDENCE')
                     if c.kind=='assertion':
@@ -241,7 +250,7 @@ class BuildService:
         from .adapters.embedding import Embedding
         from .releases import ReleaseService
         principal.require(kb_id,write=True)
-        self.get_domain(principal,kb_id,domain_version_id)
+        domain=self.get_domain(principal,kb_id,domain_version_id)
         with self.store.connect('owner') as conn:
             conn.execute('SELECT pg_advisory_xact_lock(79523489)')
             if not conn.execute("SELECT 1 FROM schema_migrations WHERE version='004'").fetchone():
@@ -251,18 +260,19 @@ class BuildService:
             rows=conn.execute('SELECT id,kind,payload FROM records WHERE kb_id=%s AND id=ANY(%s::uuid[])',(kb_id,record_ids)).fetchall()
             if len(rows)!=len(set(record_ids)) or any(r[2].get('domain_version_id')!=domain_version_id for r in rows):
                 raise ProductError('INVALID_BUILD','记录缺失或领域版本不匹配')
-            texts=[];citations=[]
-            for rid,kind,payload in rows:
-                predicate=payload.get('predicate')
-                domain=self.get_domain(principal,kb_id,domain_version_id)
-                names={d.id:d.name for group in (domain.properties,domain.relations) for d in group}
-                texts.append(names.get(predicate,'')+' '+json.dumps(payload,ensure_ascii=False,sort_keys=True))
-                for e in conn.execute('SELECT id FROM evidence_links WHERE kb_id=%s AND record_id=%s',(kb_id,rid)).fetchall():
-                    citations.append({'record_id':str(rid),'evidence_id':str(e[0])})
-        with self.store.transaction(principal,kb_id) as conn:
-            source_blocks=conn.execute('''SELECT DISTINCT b.id,b.text FROM source_blocks b WHERE b.kb_id=%s AND b.parse_version_id IN (
-                SELECT b2.parse_version_id FROM evidence_links e JOIN source_blocks b2 ON b2.kb_id=e.kb_id AND b2.id=e.block_id
-                WHERE e.kb_id=%s AND e.record_id=ANY(%s::uuid[]))''',(kb_id,kb_id,record_ids)).fetchall()
+            from .publication_checks import reference_closure
+            reference_closure(rows,domain)
+            active=conn.execute('SELECT e.id,e.record_id,e.block_id,e.quote,p.id,p.source_version_id FROM evidence_links e JOIN source_blocks b ON b.kb_id=e.kb_id AND b.id=e.block_id JOIN parse_versions p ON p.kb_id=b.kb_id AND p.id=b.parse_version_id WHERE e.kb_id=%s AND e.record_id=ANY(%s::uuid[]) AND NOT EXISTS(SELECT 1 FROM source_withdrawals w WHERE w.kb_id=p.kb_id AND w.source_version_id=p.source_version_id) ORDER BY e.id',(kb_id,record_ids)).fetchall()
+            by_record={};citations=[]
+            for eid,rid,block,quote,parse,source in active:
+                by_record.setdefault(str(rid),[]).append({'block_id':str(block),'quote':quote})
+                citations.append({'record_id':str(rid),'evidence_id':str(eid)})
+            if set(by_record)!={str(rid) for rid,_,_ in rows}:raise ProductError('EVIDENCE_REQUIRED','构建记录缺少有效来源')
+            rows=[(rid,kind,{**payload,'evidence':by_record[str(rid)]}) for rid,kind,payload in rows]
+            names={d.id:d.name for group in (domain.properties,domain.relations) for d in group}
+            texts=[names.get(payload.get('predicate'),'')+' '+json.dumps(payload,ensure_ascii=False,sort_keys=True) for _,_,payload in rows]
+            parse_ids=sorted({str(row[4]) for row in active})
+            source_blocks=conn.execute('SELECT id,text FROM source_blocks WHERE kb_id=%s AND parse_version_id=ANY(%s::uuid[]) ORDER BY id',(kb_id,parse_ids)).fetchall()
         with phase('build.semantic_embedding'):
             vectors=Embedding().embed(texts) if embed else [None]*len(texts)
         with phase('build.source_embedding'):
@@ -278,5 +288,5 @@ class BuildService:
             from .wiki import render_wiki
             with phase('build.wiki'):
                 wiki=render_wiki(rows,domain,citations)
-            conn.execute('UPDATE builds SET ready=true,manifest=%s WHERE kb_id=%s AND id=%s',(Jsonb({'domain_version_id':domain_version_id,'wiki':wiki,'vector_ready':embed,'baseline_block_ids':[str(r[0]) for r in source_blocks]}),kb_id,build_id))
+            conn.execute('UPDATE builds SET ready=true,manifest=%s WHERE kb_id=%s AND id=%s',(Jsonb({'domain_version_id':domain_version_id,'wiki':wiki,'support_snapshot':[str(row[0]) for row in active],'vector_ready':embed,'baseline_block_ids':[str(r[0]) for r in source_blocks]}),kb_id,build_id))
         return build_id

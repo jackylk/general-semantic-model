@@ -15,9 +15,10 @@ def _signature(data):
     return hmac.new(_key(),json.dumps(data,sort_keys=True,separators=(',',':')).encode(),hashlib.sha256).hexdigest()
 
 
-def write_credentials(path,role,kb_ids,source_root=None):
+def write_credentials(path,role,kb_ids,source_root=None,workspace_root=None):
     data={'role':role,'kb_ids':kb_ids}
     if source_root is not None:data['source_root']=str(source_root)
+    if workspace_root is not None:data['workspace_root']=str(Path(workspace_root).resolve())
     data['signature']=_signature(data)
     path=Path(path);path.write_text(json.dumps(data,indent=2)+'\n');path.chmod(0o600)
 

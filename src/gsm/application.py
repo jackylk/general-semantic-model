@@ -20,9 +20,36 @@ class Application:
         from .credentials import read_credentials
         config=read_credentials(self.credential_path)
         self.principal=Principal(config['role'],frozenset(config['kb_ids']))
+        self.workspace_root=Path(config['workspace_root']).resolve() if config.get('workspace_root') else None
         settings=Settings.load()
         settings.source_root=Path(config['source_root']).resolve() if config.get('source_root') else None
         self.store=Store(settings);self.sources=SourceService(self.store);self.build=BuildService(self.store);self.tasks=TaskService(self.store)
+
+    def publish(self,kb_id,build_id):
+        from .releases import ReleaseService
+        from .artifacts import current,expose
+        self.principal.require(kb_id,write=True)
+        with self.store.transaction(self.principal,kb_id) as lock:
+            lock.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s,0))",('publication:'+kb_id,))
+            service=ReleaseService(self.store,self.workspace_root)
+            release=service.publish(self.principal,kb_id,build_id)
+            if self.workspace_root:
+                expose(self.workspace_root,release)
+                current(self.workspace_root,service.current(self.principal,kb_id))
+        return release
+
+    def rollback(self,kb_id,release_id):
+        from .releases import ReleaseService
+        from .artifacts import current,expose
+        self.principal.require(kb_id,write=True)
+        with self.store.transaction(self.principal,kb_id) as lock:
+            lock.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s,0))",('publication:'+kb_id,))
+            from .search import QueryService
+            QueryService(self.store).release(lock,kb_id,release_id)
+            if self.workspace_root:expose(self.workspace_root,release_id)
+            service=ReleaseService(self.store)
+            service.rollback(self.principal,kb_id,release_id)
+            if self.workspace_root:current(self.workspace_root,service.current(self.principal,kb_id))
 
     def llm(self):
         from dotenv import dotenv_values
@@ -117,6 +144,9 @@ class Application:
 
     @timed('task.execute')
     def execute_task(self,kb_id,task_id):
+        def pipeline(payload,checkpoint):
+            from .pipeline import run
+            return run(self,kb_id,task_id,payload,checkpoint)
         def extract(payload,checkpoint):
             if checkpoint.get('result'):return checkpoint
             domain_id=payload['domain_version_id'];domain=self.build.get_domain(self.principal,kb_id,domain_id)
@@ -142,4 +172,4 @@ class Application:
         def evaluate(payload,checkpoint):
             from .evaluation import EvaluationService
             return EvaluationService(self.store,self.llm()).run(self.principal,kb_id,payload['release_id'],payload['dataset'],payload['mode'])
-        return Worker(self.tasks,{'extract':extract,'revalidate':revalidate,'build':finish,'analyze':analyze,'evaluate':evaluate}).run(self.principal,kb_id,task_id)
+        return Worker(self.tasks,{'pipeline':pipeline,'extract':extract,'revalidate':revalidate,'build':finish,'analyze':analyze,'evaluate':evaluate}).run(self.principal,kb_id,task_id)

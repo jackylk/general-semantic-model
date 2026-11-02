@@ -116,9 +116,20 @@ python3 /Users/jacky/code/gsm-automotive-validation-20261102/consumer/start-code
 ## 共用目录初始化（新流程，尚未完整验收）
 
 ```bash
-uv run --frozen python -m gsm.cli init-kb --root ../automotive-kb --name 汽车知识库
+uv run --frozen python -m gsm.cli init-kb --root ../gsm-automotive-kb --name 汽车知识库
 ```
 
-该命令由产品执行，不调用Codex或LLM：迁移通用数据库结构、登记空知识库、创建documents/domain/wiki/releases/reports空目录。未导入任何汽车知识。两角色都以automotive-kb为根目录，分别使用start-producer.py与start-consumer.py；producer是业务角色名，内部历史开发者API身份暂保留developer以兼容合同。
+该命令由产品执行，不调用Codex或LLM：迁移通用数据库结构、登记空知识库、创建documents/domain/wiki/releases/reports空目录。未导入任何汽车知识。两角色都以gsm-automotive-kb为根目录，分别使用start-producer.py与start-consumer.py；producer是业务角色名，内部历史开发者API身份暂保留developer以兼容合同。
 
 此入口目前完成初始化和共用目录骨架。共用目录下的凭据隔离、完整Pipeline与发布产物导出尚未完成，不应替代已验证OS隔离的旧汽车测试入口开展正式验收。未自动迁移或覆盖旧知识库。
+
+
+## 产品运行数据与本项目自迭代控制
+
+`gsm-runtime-data/` 为产品软件自动管理的运行数据：凭据、服务进程、知识库注册及按KB作用域存储。最终客户无需了解或操作我们的三窗口实验控制流程。
+
+本项目的实验控制单独放在 `../gsm-iteration-control/`：`state.json` 保存当前轮次与阶段，`iterations/` 保存每轮版本及结果引用，`decisions/` 保存通用改进决定，`events.jsonl` 记录状态变化。控制区只存状态、元数据和结果位置，不存原始汽车文档或保密评测的问题/答案。普通知识库初始化、构建和问答不依赖该控制区。
+
+汽车知识库统一为 `../gsm-automotive-kb/`，两个窗口共用。原始文档仅第二窗口读取，独立评测目录仅第三窗口读取；第三窗口输出 `../gsm-automotive-results/`，第一窗口读取结果并改进通用产品。原始资料、评测题目及判分规则不复制进控制区或产品仓库。旧 `gsm-automotive-validation-20261102/` 仅是历史验证记录，不是新知识库目录。
+
+当前目标流程及最新权限、共用目录、完整Pipeline和多页Wiki入口统一见 [共用知识库流程](shared-kb-workflow.md)。上文旧的双工作区汽车实验目录仅保留历史证据，不能作为新流程入口。原空白gsm-knowledge-workspaces-20261102已按用户指令删除。

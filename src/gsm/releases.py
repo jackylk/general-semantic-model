@@ -3,7 +3,7 @@ from psycopg.types.json import Jsonb
 from .errors import ProductError
 
 class ReleaseService:
-    def __init__(self,store): self.store=store
+    def __init__(self,store,workspace_root=None): self.store=store;self.workspace_root=workspace_root
 
     def stage(self,principal,kb_id,record_ids,ready=False):
         principal.require(kb_id,write=True)
@@ -30,13 +30,29 @@ class ReleaseService:
                 JOIN parse_versions p ON p.kb_id=b.kb_id AND p.id=b.parse_version_id
                 WHERE e.kb_id=%s AND e.record_id=ANY(%s::uuid[]) AND NOT EXISTS
                 (SELECT 1 FROM source_withdrawals w WHERE w.kb_id=p.kb_id AND w.source_version_id=p.source_version_id)''',(kb_id,record_ids)).fetchall()
+            if 'support_snapshot' in build[2] and set(build[2]['support_snapshot'])!={str(e[0]) for e in evidence}:
+                raise ProductError('BUILD_STALE','来源支持在构建后变化，请重新构建再发布')
+            if build[2].get('domain_version_id'):
+                from .build import BuildService
+                from .publication_checks import reference_closure
+                domain=BuildService(self.store).get_domain(principal,kb_id,build[2]['domain_version_id'])
+                payloads=conn.execute('SELECT id,kind,payload FROM records WHERE kb_id=%s AND id=ANY(%s::uuid[])',(kb_id,record_ids)).fetchall()
+                reference_closure(payloads,domain)
             supported={str(e[1]) for e in evidence}
             if supported!=set(record_ids):
                 raise ProductError('EVIDENCE_REQUIRED','记录缺少有效来源支持')
             manifest={**build[2], 'record_ids':record_ids,'evidence_ids':[str(e[0]) for e in evidence],
                 'block_ids':sorted({str(e[2]) for e in evidence}),'parse_version_ids':sorted({str(e[3]) for e in evidence}),
                 'source_version_ids':sorted({str(e[4]) for e in evidence})}
-            release=conn.execute('INSERT INTO releases(kb_id,build_id,manifest) VALUES(%s,%s,%s) RETURNING id',(kb_id,build_id,Jsonb(manifest))).fetchone()[0]
+            from uuid import uuid4
+            release=str(uuid4())
+            if self.workspace_root:
+                from .artifacts import prepare
+                from .build import BuildService
+                payloads=conn.execute('SELECT id,kind,payload FROM records WHERE kb_id=%s AND id=ANY(%s::uuid[])',(kb_id,record_ids)).fetchall()
+                domain=BuildService(self.store).get_domain(principal,kb_id,manifest['domain_version_id']).model_dump(mode='json')
+                prepare(self.workspace_root,release,manifest,[{'id':str(rid),'kind':kind,'payload':payload} for rid,kind,payload in payloads],domain)
+            conn.execute('INSERT INTO releases(id,kb_id,build_id,manifest) VALUES(%s,%s,%s,%s)',(release,kb_id,build_id,Jsonb(manifest)))
             conn.execute('UPDATE knowledge_bases SET current_release=%s WHERE id=%s',(release,kb_id))
             return str(release)
 

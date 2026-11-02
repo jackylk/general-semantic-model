@@ -1,6 +1,7 @@
 import json
 import time
-from urllib.request import Request,urlopen
+from urllib.request import Request,urlopen,build_opener,ProxyHandler
+from urllib.parse import urlsplit
 from urllib.error import HTTPError,URLError
 from gsm.errors import ProductError
 
@@ -9,7 +10,8 @@ def post_json(url,payload,headers=None,timeout=30,retries=1):
     for attempt in range(retries+1):
         try:
             req=Request(url,data=json.dumps(payload,ensure_ascii=False).encode(),headers={'Content-Type':'application/json',**(headers or {})})
-            with urlopen(req,timeout=timeout) as response:
+            open_request=build_opener(ProxyHandler({})).open if urlsplit(url).hostname in ('127.0.0.1','localhost','::1') else urlopen
+            with open_request(req,timeout=timeout) as response:
                 raw=response.read(16*1024*1024+1)
                 if len(raw)>16*1024*1024: raise ProductError('RESPONSE_TOO_LARGE','模型响应超过限制')
                 return json.loads(raw)

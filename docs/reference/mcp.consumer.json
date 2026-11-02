@@ -245,6 +245,28 @@
     }
   },
   {
+    "name": "list_wiki_pages",
+    "description": "",
+    "inputSchema": {
+      "properties": {
+        "kb_id": {
+          "title": "Kb Id",
+          "type": "string"
+        },
+        "release_id": {
+          "title": "Release Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kb_id",
+        "release_id"
+      ],
+      "title": "list_wiki_pagesArguments",
+      "type": "object"
+    }
+  },
+  {
     "name": "get_wiki",
     "description": "",
     "inputSchema": {
@@ -256,6 +278,18 @@
         "release_id": {
           "title": "Release Id",
           "type": "string"
+        },
+        "page": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Page"
         }
       },
       "required": [

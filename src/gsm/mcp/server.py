@@ -15,7 +15,8 @@ from gsm.observability import phase,SAFE
 
 def create_server(app:Application):
     role=app.principal.role
-    mcp=FastMCP('GSM '+role,instructions='用户说“我要开始创建知识库”时，先调用 discover_spec，按开发者指南引导定义领域；无需用户手写 Schema。所有查询必须绑定知识库和发布版本。')
+    instructions=('用户说“我要开始创建知识库”时，先调用discover_spec并引导定义领域。' if role=='developer' else '你是第三窗口：只读已发布知识、问答与独立评测；业务文件仅写配置的consumer_results_root。不得主动尝试越权写入或创建canary，权限负向测试由第一窗口在隔离合成环境执行。')
+    mcp=FastMCP('GSM '+role,instructions=instructions+'所有查询必须绑定知识库和固定发布版本，不得修改产品软件。')
     p=app.principal;store=app.store;releases=ReleaseService(store);queries=QueryService(store)
     def tool(fn):
         @functools.wraps(fn)
@@ -64,8 +65,17 @@ def create_server(app:Application):
         return releases.read_evidence(p,kb_id,release_id,evidence_id)
 
     @tool
-    def get_wiki(kb_id:str,release_id:str)->dict:
-        return queries.wiki(p,kb_id,release_id)
+    def list_wiki_pages(kb_id:str,release_id:str)->dict:
+        wiki=queries.wiki(p,kb_id,release_id)
+        return {'release_id':release_id,'pages':[{'path':item['path'],'title':item['title'],'record_count':len(item.get('record_ids',[]))} for item in wiki.get('pages',[])]}
+
+    @tool
+    def get_wiki(kb_id:str,release_id:str,page:str|None=None)->dict:
+        wiki=queries.wiki(p,kb_id,release_id)
+        if page is None:return wiki
+        found=next((item for item in wiki.get('pages',[]) if item['path']==page),None)
+        if found is None:raise ProductError('NOT_FOUND','该发布版没有此Wiki页面')
+        return {**found,'release_id':release_id}
 
     @tool
     def retrieve(kb_id:str,release_id:str,question:str)->dict:
@@ -123,6 +133,13 @@ def create_server(app:Application):
         return app.tasks.submit(p,kb_id,'analyze',{'source_version_ids':source_version_ids,'purpose':purpose,'questions':questions},idempotency_key)
 
     @tool
+    def start_pipeline(kb_id:str,domain_version_id:str,source_version_ids:list[str],idempotency_key:str,batch_chars:int=20000,focus:str|None=None)->dict:
+        """处理全部指定来源：自动分批、抽取、证据语义复核、持久化恢复、覆盖报告及构建。就绪后仍需预览并发布。"""
+        if not 1000<=batch_chars<=40000:raise ProductError('INVALID_BATCH_SIZE','每批正文限制1000–40000字符')
+        if focus is not None and (not focus.strip() or len(focus)>4000):raise ProductError('INVALID_FOCUS','重点不超过4000字符')
+        return app.tasks.submit(p,kb_id,'pipeline',{'domain_version_id':domain_version_id,'source_version_ids':source_version_ids,'batch_chars':batch_chars,'focus':focus},idempotency_key)
+
+    @tool
     def preview_extraction(kb_id:str,domain_version_id:str,source_version_ids:list[str],idempotency_key:str,focus:str|None=None)->dict:
         payload={'domain_version_id':domain_version_id,'source_version_ids':source_version_ids}
         if focus is not None:
@@ -133,6 +150,12 @@ def create_server(app:Application):
     @tool
     def get_task(kb_id:str,task_id:str)->dict:
         return app.tasks.get(p,kb_id,task_id)
+
+    @tool
+    def get_task_status(kb_id:str,task_id:str)->dict:
+        """轻量轮询：不重复返回大批候选、原文和复核细节。完成后get_task读取完整结果。"""
+        task=app.tasks.get(p,kb_id,task_id);cp=task['checkpoint'] or {}
+        return {'id':task['id'],'kind':task['kind'],'status':task['status'],'stage':task['stage'],'error':task['error'],'progress':{'completed_batches':len(cp.get('completed_batches',[])),'planned_batches':cp.get('coverage',{}).get('planned_batches'),'candidate_count':len(cp.get('candidate_ids',[])),'build_id':cp.get('build_id')}}
 
     @tool
     def cancel_task(kb_id:str,task_id:str)->dict:
@@ -162,11 +185,11 @@ def create_server(app:Application):
 
     @tool
     def publish(kb_id:str,build_id:str)->dict:
-        return {'release_id':releases.publish(p,kb_id,build_id)}
+        return {'release_id':app.publish(kb_id,build_id)}
 
     @tool
     def rollback(kb_id:str,release_id:str)->dict:
-        releases.rollback(p,kb_id,release_id);return {'current_release':release_id}
+        app.rollback(kb_id,release_id);return {'current_release':release_id}
 
     @tool
     def evaluate(kb_id:str,release_id:str,dataset:list[dict],mode:str,idempotency_key:str)->dict:

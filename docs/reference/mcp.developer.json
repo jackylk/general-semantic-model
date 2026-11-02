@@ -245,6 +245,28 @@
     }
   },
   {
+    "name": "list_wiki_pages",
+    "description": "",
+    "inputSchema": {
+      "properties": {
+        "kb_id": {
+          "title": "Kb Id",
+          "type": "string"
+        },
+        "release_id": {
+          "title": "Release Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kb_id",
+        "release_id"
+      ],
+      "title": "list_wiki_pagesArguments",
+      "type": "object"
+    }
+  },
+  {
     "name": "get_wiki",
     "description": "",
     "inputSchema": {
@@ -256,6 +278,18 @@
         "release_id": {
           "title": "Release Id",
           "type": "string"
+        },
+        "page": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Page"
         }
       },
       "required": [
@@ -572,6 +606,58 @@
     }
   },
   {
+    "name": "start_pipeline",
+    "description": "处理全部指定来源：自动分批、抽取、证据语义复核、持久化恢复、覆盖报告及构建。就绪后仍需预览并发布。",
+    "inputSchema": {
+      "properties": {
+        "kb_id": {
+          "title": "Kb Id",
+          "type": "string"
+        },
+        "domain_version_id": {
+          "title": "Domain Version Id",
+          "type": "string"
+        },
+        "source_version_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Source Version Ids",
+          "type": "array"
+        },
+        "idempotency_key": {
+          "title": "Idempotency Key",
+          "type": "string"
+        },
+        "batch_chars": {
+          "default": 20000,
+          "title": "Batch Chars",
+          "type": "integer"
+        },
+        "focus": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Focus"
+        }
+      },
+      "required": [
+        "kb_id",
+        "domain_version_id",
+        "source_version_ids",
+        "idempotency_key"
+      ],
+      "title": "start_pipelineArguments",
+      "type": "object"
+    }
+  },
+  {
     "name": "preview_extraction",
     "description": "",
     "inputSchema": {
@@ -637,6 +723,28 @@
         "task_id"
       ],
       "title": "get_taskArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "get_task_status",
+    "description": "轻量轮询：不重复返回大批候选、原文和复核细节。完成后get_task读取完整结果。",
+    "inputSchema": {
+      "properties": {
+        "kb_id": {
+          "title": "Kb Id",
+          "type": "string"
+        },
+        "task_id": {
+          "title": "Task Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kb_id",
+        "task_id"
+      ],
+      "title": "get_task_statusArguments",
       "type": "object"
     }
   },
