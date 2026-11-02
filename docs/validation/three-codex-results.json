@@ -1,0 +1,165 @@
+{
+  "status": "12_question_baseline_passed_36_question_round_found_semantic_coverage_gaps",
+  "product_core_sha": "fdc329e0e1cd8d74008d09714614206541b9b7af",
+  "kb_id": "22663bf1-1e55-4b72-9b61-0b491545bea8",
+  "release_id": "ea0d0c5c-8b6a-41f7-9137-bef62affc71d",
+  "role_sessions": {
+    "developer_session": "01a194e0-2192-79b0-903c-ff55377ebec0",
+    "consumer_session": "01a194e1-e009-73c1-9843-dc6d8e79551b"
+  },
+  "cases": [
+    {
+      "id": "Q01",
+      "question": "博世 Flexible control unit 资料对功能安全等级怎样表述？能否说整车已获同等级认证？",
+      "passed": true,
+      "status": "supported",
+      "review": "SEooC/ASIL C，并保留整车认证边界",
+      "review_kind": "C1 AI source review plus deterministic original quote/page/version audit; not human expert gold"
+    },
+    {
+      "id": "Q02",
+      "question": "博世电驱系统由哪四个主要部分组成？请通过关系查询给出系统到组成部件的路径。",
+      "passed": true,
+      "status": "supported",
+      "review": "四部件与真实系统到部件路径",
+      "review_kind": "C1 AI source review plus deterministic original quote/page/version audit; not human expert gold"
+    },
+    {
+      "id": "Q03",
+      "question": "TIDA-020076 单模块最多管理多少电芯、最大电压是多少？文档对叠加模块数和串联电芯数怎样表述？",
+      "passed": true,
+      "status": "supported",
+      "review": "18电芯/100 V/35模块/560串，未替换成630",
+      "review_kind": "C1 AI source review plus deterministic original quote/page/version audit; not human expert gold"
+    },
+    {
+      "id": "Q04",
+      "question": "提供的 TI BMS BOM 中 U2 的料号、制造商和装配数量是什么？",
+      "passed": true,
+      "status": "supported",
+      "review": "U2精确料号/制造商/数量",
+      "review_kind": "C1 AI source review plus deterministic original quote/page/version audit; not human expert gold"
+    },
+    {
+      "id": "Q05",
+      "question": "EH7 英文维护手册中，动力电池保修期内的容量衰减限制是多少？保修时间与里程怎样组合适用？",
+      "passed": true,
+      "status": "supported",
+      "review": "8年或160000 km先到，正常使用/额定Ah/30%及市场",
+      "review_kind": "C1 AI source review plus deterministic original quote/page/version audit; not human expert gold"
+    },
+    {
+      "id": "Q06",
+      "question": "EHS7 英文维护手册里 12V 电池的保修期限和里程是多少？",
+      "passed": true,
+      "status": "supported",
+      "review": "12V电池1年或20000 km先到",
+      "review_kind": "C1 AI source review plus deterministic original quote/page/version audit; not human expert gold"
+    },
+    {
+      "id": "Q07",
+      "question": "哪家供应商的资料同时描述 Flexible control unit 和包含电池的电驱系统？展示“供应商—电驱系统—电池”的实际图路径及证据。",
+      "passed": true,
+      "status": "supported",
+      "review": "Bosch供应商—电驱—电池实际路径",
+      "review_kind": "C1 AI source review plus deterministic original quote/page/version audit; not human expert gold"
+    },
+    {
+      "id": "Q08",
+      "question": "TI 设计指南所述 BQ79718B-Q1 与 BOM 的 U2 料号写法是否一致？能否不作说明就把两者当作完全相同的精确型号？",
+      "passed": true,
+      "status": "supported",
+      "review": "B后缀及家族/精确料号差异未合并",
+      "review_kind": "C1 AI source review plus deterministic original quote/page/version audit; not human expert gold"
+    },
+    {
+      "id": "Q09",
+      "question": "EH7 与 EHS7 是否应合并成同一车型？这两份英文资料的市场范围是否足以直接证明中国版配置？",
+      "passed": true,
+      "status": "supported",
+      "review": "EH7/EHS7及市场身份未合并",
+      "review_kind": "C1 AI source review plus deterministic original quote/page/version audit; not human expert gold"
+    },
+    {
+      "id": "Q10",
+      "question": "TI BMS BOM 的 U9 是什么器件，标记为 Fitted 还是 Not Fitted，装配数量多少？",
+      "passed": true,
+      "status": "supported",
+      "review": "U9 Not Fitted/数量0，保留截断描述",
+      "review_kind": "C1 AI source review plus deterministic original quote/page/version audit; not human expert gold"
+    },
+    {
+      "id": "Q11",
+      "question": "这些资料证明 TI 参考设计已经被哪些具体量产车型采用？请列出已被证实的量产车型 BOM。",
+      "passed": true,
+      "status": "insufficient",
+      "review": "资料不足，未虚构量产采用或将空检索当不存在",
+      "review_kind": "C1 AI source review plus deterministic original quote/page/version audit; not human expert gold"
+    },
+    {
+      "id": "Q12",
+      "question": "能否根据这些资料确定 EH7 换大一寸轮毂后高速能耗必然增加 5%？缺少什么证据？",
+      "passed": true,
+      "status": "insufficient",
+      "review": "资料不足，未编造5%因果，说明所需控制条件",
+      "review_kind": "C1 AI source review plus deterministic original quote/page/version audit; not human expert gold"
+    }
+  ],
+  "checks": {
+    "all_12_questions_reviewed": true,
+    "two_refusals": true,
+    "all_boundaries": true,
+    "all_lifecycle": true,
+    "all_wiki": true,
+    "role_files_scoped": true,
+    "real_graph_paths": true,
+    "condition_regression": true,
+    "originals_unchanged": true,
+    "gold_unchanged": true
+  },
+  "counts": {
+    "pytest": 81,
+    "questions_passed": 12,
+    "questions_total": 12,
+    "boundary_checks": 21,
+    "answer_unique_evidence": 21,
+    "wiki_citations": 150,
+    "records": 116,
+    "conditional_records": 15,
+    "source_documents": 6,
+    "source_pages": 67,
+    "baseline_blocks": 1133
+  },
+  "limitations": [
+    "automotive only; no three-domain generality claim",
+    "AI reference and source review; not human expert acceptance",
+    "native digital PDF only; OCR/scanned documents not accepted",
+    "bounded retrieval may return explicit budget/network errors; no availability/cost benchmark",
+    "nonsemantic PDF revision fixture does not establish semantic conflict quality",
+    "OS role isolation was test-only; ordinary user workspace-write launcher is not read isolation or whole-host security"
+  ],
+  "expanded_heldout": {
+    "release_id": "ea0d0c5c-8b6a-41f7-9137-bef62affc71d",
+    "questions": 24,
+    "unique_evidence": 38,
+    "status_counts": {
+      "supported": 18,
+      "partial": 3,
+      "insufficient": 3
+    },
+    "support_channels": {
+      "source_blocks": 19,
+      "mixed": 2,
+      "semantic_records": 1,
+      "insufficient": 2
+    },
+    "semantic_coverage": {
+      "none": 21,
+      "partial": 3
+    },
+    "interpretation": "24 heldout questions were never provided to C2. Most answers relied on original-text retrieval; two requested graph paths were missing. Source-answer support must not be counted as semantic extraction coverage."
+  },
+  "total_questions": 36,
+  "questions_not_given_to_developer": 30,
+  "round2": "in progress: source-derived broader domain plus stage timing in a new isolated KB; not yet accepted"
+}

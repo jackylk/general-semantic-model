@@ -19,7 +19,7 @@ Embedding 为 http://127.0.0.1:8010/v1，模型 qwen3-embedding-0.6b-mlx，1024 
 
 ## 解析
 
-使用 MinerU 本地 `mineru-kit parse <file> --tier flash --disable-image-analysis --format middle_json -o <output>`，不使用 --remote，不静默上传。保留 middle JSON、页块位置、表格结构。flash 是首条数字 PDF 链路；扫描件需要 OCR 后端，必须另行验证，不能把无正文当成功。
+使用 MinerU 本地 `mineru-kit parse <file> --tier flash --ocr-mode txt --disable-image-analysis --format middle_json -o <output>`，不使用 --remote，不静默上传。保留 middle JSON、页块位置、表格结构。flash 是首条数字 PDF 链路；扫描件需要 OCR 后端，必须另行验证，不能把无正文当成功。
 
 当前本地源码位于 ../MinerU；其许可为 Apache 2.0 加附加商业阈值及在线服务署名条款，参见该版本 LICENSE.md。本项目通过进程边界调用，不复制其实现；后续分发必须重新核对实际版本及模型权重许可。
 
@@ -31,8 +31,8 @@ Embedding 为 http://127.0.0.1:8010/v1，模型 qwen3-embedding-0.6b-mlx，1024 
 
 ```bash
 uv run --frozen python -m gsm.cli migrate
-uv run --frozen python -m gsm.cli init-workspaces --root runtime/workspaces
-uv run --frozen python -m gsm.cli worker --credentials runtime/workspaces/developer/credentials.json
+uv run --frozen python -m gsm.cli init-workspaces --root ../gsm-knowledge-workspaces
+uv run --frozen python -m gsm.cli worker --credentials ../gsm-knowledge-workspaces/developer/credentials.json
 ```
 
 init-workspaces 拒绝覆盖非空目录。第二、第三窗口分别打开 runtime/workspaces/developer 和 consumer。这是实验数据，未提交 Git。第二窗口说“我要开始创建知识库”；第三窗口等待开发者提供发布版。工作区含项目级 MCP 配置，不修改用户全局 Codex 配置。客户端可能要求用户信任新工作区；这是客户端设置，不代表产品批准写入。
@@ -54,6 +54,10 @@ python3 runtime/workspaces/developer/start-codex.py
 python3 runtime/workspaces/consumer/start-codex.py
 ```
 
-CLI 会话启动后，开发者输入“我要开始创建知识库”。图形界面方式仍需按客户端提示信任对应工作区，再检查 MCP 连接。已验证的是配置发现和独立 MCP 客户端；实际第二窗口引导体验待用户验收。
+CLI 会话启动后，开发者输入“我要开始创建知识库”。图形界面方式仍需按客户端提示信任对应工作区，再检查 MCP 连接。已通过独立原生 Codex CLI 的引导、汽车建库和消费预验收，见 docs/testing/three-codex-results.md；图形客户端体验仍待用户实际确认。
 
 新工作区不预选任何外部资料目录。developer/documents 是空的产品收件目录，不代表用户已有资料位置。建库时先由用户提供文件或目录，Codex 将选定样本复制到收件目录，再调用 register_source。不要递归扫描其他项目猜测用户知识来源。
+
+正式试用应使用产品 Git 仓库之外的独立目录，例如 `../gsm-knowledge-workspaces`。初始化生成空收件目录和新的知识库作用域，不预置资料位置。启动器显式传入 workspace-write 并清空额外 writable_roots，不改全局设置。该写沙箱不是读取隔离；本次验收额外使用了外层 OS 读取限制，见测试规范。[OpenAI 官方沙箱说明](https://learn.chatgpt.com/docs/sandboxing)。
+
+计时诊断默认关闭。需要按阶段复现时，为 MCP 服务和 worker 设置 `GSM_TIMING_LOG=/absolute/path/timings.jsonl`；可选 `GSM_TIMING_ROLE=developer|consumer|worker` 标记来源。日志记录阶段、起止时间、耗时和作用域 ID，不记录凭据、提示词、原文或异常正文。嵌套阶段不可与父阶段重复求和；网络失败且未返回 usage 的上游调用不能据此准确计费。

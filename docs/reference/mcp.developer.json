@@ -321,6 +321,98 @@
     }
   },
   {
+    "name": "revalidate_candidates",
+    "description": "用当前核验器重核验现有候选，不调用模型或接受手填事实；创建新候选并保留原候选。",
+    "inputSchema": {
+      "properties": {
+        "kb_id": {
+          "title": "Kb Id",
+          "type": "string"
+        },
+        "domain_version_id": {
+          "title": "Domain Version Id",
+          "type": "string"
+        },
+        "candidate_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Candidate Ids",
+          "type": "array"
+        },
+        "idempotency_key": {
+          "title": "Idempotency Key",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kb_id",
+        "domain_version_id",
+        "candidate_ids",
+        "idempotency_key"
+      ],
+      "title": "revalidate_candidatesArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "preview_build",
+    "description": "发布前只读检查已就绪构建、条件筛选及 Wiki；不创建发布版或切换当前版本。",
+    "inputSchema": {
+      "properties": {
+        "kb_id": {
+          "title": "Kb Id",
+          "type": "string"
+        },
+        "build_id": {
+          "title": "Build Id",
+          "type": "string"
+        },
+        "kind": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Kind"
+        },
+        "conditions": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Conditions"
+        },
+        "limit": {
+          "default": 100,
+          "title": "Limit",
+          "type": "integer"
+        },
+        "offset": {
+          "default": 0,
+          "title": "Offset",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kb_id",
+        "build_id"
+      ],
+      "title": "preview_buildArguments",
+      "type": "object"
+    }
+  },
+  {
     "name": "discover_spec",
     "description": "创建知识库的首个入口：发现指南、定义 Schema 和完整示例。",
     "inputSchema": {
@@ -533,6 +625,28 @@
         "task_id"
       ],
       "title": "get_taskArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "cancel_task",
+    "description": "",
+    "inputSchema": {
+      "properties": {
+        "kb_id": {
+          "title": "Kb Id",
+          "type": "string"
+        },
+        "task_id": {
+          "title": "Task Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kb_id",
+        "task_id"
+      ],
+      "title": "cancel_taskArguments",
       "type": "object"
     }
   },

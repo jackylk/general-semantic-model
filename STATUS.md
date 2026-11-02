@@ -1,15 +1,15 @@
-# 原型状态：可开始独立窗口试用
+# 原型状态：汽车实验中，语义覆盖仍需改进
 
-产品开发分支：prototype。当前为本地实验原型，不是三领域通用性验收结论。
+产品为本地实验原型，不是通用语义模型已成立或生产可用的结论。原始任务书见 README.md。
 
-已验证：59 项自动检查；真实 PostgreSQL 角色和跨库隔离、不可变证据及发布；真实 DeepSeek JSON 与本地 1024 维 Embedding；本地 MinerU 数字 PDF；合成 PDF 经公开 MCP 完成抽取、核验、构建、发布和使用者取证回答。186 份汽车 PDF 指纹复核通过。见 docs/validation/。
+当前84项自动检查通过。三角色汽车实验使用当前产品窗口、独立知识库开发者 Codex、独立只读使用者 Codex；开发者/使用者不读写产品代码和固定 Schema，测试使用外层 OS 隔离、签名角色与知识库作用域。核心没有预置汽车表、汽车图、车型或厂商规则。
 
-第二窗口工作区：runtime/workspaces/developer。图形界面信任工作区并确认 gsm_developer MCP 后，说“我要开始创建知识库”。或在终端执行 `python3 runtime/workspaces/developer/start-codex.py` 使用会话配置启动。第三窗口为 runtime/workspaces/consumer，等待开发者发布后使用。
+首轮导入6篇真实数字PDF（67页、1133原文块）；V4发布116条语义记录：61条对象、29条属性断言、26条关系，对应60个去重对象节点、26条去重边；15条记录有结构化条件。Wiki目前为1篇记录总览、150个证据引用，不是多篇主题文章。
 
-后台需要本项目 PostgreSQL、Embedding 与 worker。启动和复现见 docs/setup.md；开发者指南 docs/developer-guide.md；使用者指南 docs/consumer-guide.md。项目不更改全局 Codex 配置。
+12题基线、权限/条件/真实图路径/Wiki引用/失败恢复/版本固定检查通过。追加24题未交给建库者，在固定V4盲测；答案为18条supported、3条partial、3条insufficient。追加题主要依赖原文检索，语义覆盖为21题none、3题partial，两个指定图路径缺失。原文问答成功不能当作语义图已覆盖。
 
-待验收：第二窗口独立引导与汽车建库、第三窗口真实问题、人工金标准及阈值、另外两个领域、扫描件 OCR 和代表性表格。现阶段不能宣称通用性成立。全文/向量基线范围、词面核验的边界见 experiments/protocol.md 与 docs/reference/domain.md。
+第二轮正在独立新库中扩大来源主题覆盖并采集冷解析、模型、抽取、核验、索引、发布和检索阶段时间；尚未完成，不算通过。测试规范见 docs/testing/three-codex-acceptance.md，机器结果见 docs/validation/three-codex-results.json。
 
-原始 README.md 作为任务书保留；本文件报告实现状态，不把目标设计写成已完成能力。
+背景服务需要 PostgreSQL、Embedding、DeepSeek 和 worker；配置见 docs/setup.md。新工作区使用空 documents 收件目录；用户输入“我要开始创建知识库”后先提供文档，产品不知道文档原本在哪里。不要在产品仓库里开展第二/第三角色知识开发。
 
-建库入口已取消预置外部资料目录。第二窗口先请用户提供知识文档或目录，再自动将选定样本放入工作区 documents 收件目录登记；收件目录不会预装资料。既有对话曾读取旧配置时需要重载 MCP，且不能把历史目录提示当成用户选择。
+仍未验收：另外两个领域、人工专家金标准、扫描件OCR、全主题语义覆盖和生产安全/性能。

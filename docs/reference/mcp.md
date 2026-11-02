@@ -13,3 +13,7 @@
 Codex 项目级 `.codex/config.toml` 和 stdio cwd 的配置依据：[官方 MCP 文档](https://learn.chatgpt.com/docs/extend/mcp?surface=cli)。客户端要求项目可信后才加载项目级配置；本项目不更改全局信任设置。
 
 withdraw_source 使来源不再支持后续构建和自动冲突判断，不追溯修改既有发布版。历史发布版仍能读取固定证据以便审计；如果当前身份的知识库授权被撤销，则历史引用读取同样拒绝。来源撤回与访问授权撤销是两个不同操作。
+
+开发者 `preview_build(kb_id, build_id, kind?, conditions?, limit?, offset?)` 只读已就绪构建，支持发布前条件正反向筛选并查看派生 Wiki。返回 preview_only=true 表示该调用不发布，不代表该 build 从未被发布。原文通过 read_candidate_evidence 核对。使用者无此工具，不能读取未发布候选或构建。
+
+`revalidate_candidates` 是开发者任务：在同一 KB/领域版本中读取现有候选，按当前核验器生成新快照并返回旧新 ID 映射，不调用 LLM，不接受新事实，不修改旧候选。已拒绝候选不可通过该入口恢复；重核验仍需遵循证据、必需条件和审核门禁。
