@@ -74,3 +74,30 @@ def test_lightweight_status_handles_non_pipeline_coverage_without_loading_payloa
     status=service.status(p,kb,task['id'])
     assert status['progress']['planned_batches'] is None and status['progress']['candidate_count']==0
     assert 'checkpoint' not in status and 'payload' not in status
+
+
+def test_worker_keeps_producer_validation_diagnostics(tmp_path):
+    from uuid import uuid4
+    from gsm.config import Settings
+    from gsm.store import Store
+    from gsm.auth import Principal
+    from gsm.tasks import TaskService
+    from gsm.worker import Worker
+    from gsm.errors import ProductError
+    s=Store(Settings.load());s.migrate();kb=str(uuid4());p=Principal('developer',frozenset([kb]));s.create_kb(p,kb,'diagnostics');tasks=TaskService(s)
+    task=tasks.submit(p,kb,'extract',{},'diagnostic')
+    def fail(*a):raise ProductError('INVALID_EXTRACTION','bad shape',[{'path':'candidates.0.subject','type':'string_type'}])
+    result=Worker(tasks,{'extract':fail}).run(p,kb,task['id'])
+    assert result['error']['details'][0]['type']=='string_type'
+
+
+def test_detailed_error_is_separate_from_lightweight_status(tmp_path):
+    from uuid import uuid4
+    from gsm.config import Settings
+    from gsm.store import Store
+    from gsm.auth import Principal
+    from gsm.tasks import TaskService
+    s=Store(Settings.load());s.migrate();kb=str(uuid4());p=Principal('developer',frozenset([kb]));s.create_kb(p,kb,'error detail');tasks=TaskService(s);task=tasks.submit(p,kb,'extract',{},'error')
+    tasks.fail(p,kb,task['id'],'INVALID_EXTRACTION','shape error',details=[{'type':'string_type','path':'candidates.0.subject'}])
+    assert 'details' not in tasks.status(p,kb,task['id'])['error']
+    assert tasks.get_error(p,kb,task['id'])['details'][0]['type']=='string_type'

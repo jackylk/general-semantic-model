@@ -291,3 +291,43 @@ def test_focused_extraction_keeps_fixed_domain_and_routes_only_data_instructions
             return Completion({'candidates':candidates(block)},'test',{})
     result=app.extract_candidates(kb,dv,[{'block_id':block,'text':'test'}],Model(),focus='Inspect missing connectivity using existing declared types.')
     assert result['result']['candidates'] and b.get_domain(p,kb,dv).model_dump(mode='json')==before
+
+
+def test_malformed_candidate_does_not_erase_other_valid_candidates(build_env,tmp_path):
+    from gsm.application import Application
+    from gsm.adapters.llm import Completion
+    from gsm.credentials import write_credentials
+    store,b,_,p,kb,dv,block=build_env
+    credential=tmp_path/'producer.json';write_credentials(credential,'developer',[kb],tmp_path)
+    app=Application(credential);app.store=store;app.build=b
+    class Model:
+        model='test'
+        def complete(self,prompt):
+            import json
+            bid=json.loads(prompt)['untrusted_source_blocks'][0]['block_id']
+            return Completion({'candidates':[
+                {'kind':'object','type_id':'device','local_id':'a','identity':{'serial':'001'},'evidence':[{'block_id':bid,'quote':'设备 A 序号 001'}]},
+                {'kind':'assertion','subject':{'invalid':'shape'},'predicate':'power','value':{'value':'10.25','unit':'W'},'evidence':[{'block_id':bid,'quote':'20℃时 A 功率 10.25 W'}]}]},'test',{'total_tokens':10})
+    result=app.extract_candidates(kb,dv,[{'block_id':block,'text':'设备 A 序号 001。20℃时 A 功率 10.25 W。','locator':{}}],Model())
+    assert len(result['result']['candidates'])==1 and result['result']['candidates'][0]['status']=='verified'
+    assert result['coverage']=='partial_structural_validation'
+    assert len(result['extraction_rejections'])==1 and result['usage']['total_tokens']==20
+    assert result['extraction_rejections'][0]['raw_candidate']['subject']=={'invalid':'shape'}
+
+
+def test_wrong_batch_evidence_is_rejected_even_when_another_candidate_is_valid(build_env,tmp_path):
+    import json
+    from gsm.application import Application
+    from gsm.adapters.llm import Completion
+    from gsm.credentials import write_credentials
+    store,b,_,p,kb,dv,block=build_env;profile=tmp_path/'producer.json';write_credentials(profile,'developer',[kb],tmp_path);app=Application(profile);app.store=store;app.build=b
+    class Model:
+        model='test'
+        def complete(self,prompt):
+            bid=json.loads(prompt)['untrusted_source_blocks'][0]['block_id']
+            good={'kind':'object','type_id':'device','local_id':'a','identity':{'serial':'001'},'evidence':[{'block_id':bid,'quote':'设备 A 序号 001'}]}
+            bad={**good,'local_id':'bad','evidence':[{'block_id':'B9999','quote':'设备 A 序号 001'}]}
+            return Completion({'candidates':[good,bad]},'test',{})
+    result=app.extract_candidates(kb,dv,[{'block_id':block,'text':'设备 A 序号 001','locator':{}}],Model())
+    assert len(result['result']['candidates'])==1 and len(result['extraction_rejections'])==1
+    assert result['extraction_rejections'][0]['errors'][0]['type']=='evidence_scope'

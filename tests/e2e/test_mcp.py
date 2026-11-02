@@ -51,7 +51,7 @@ def test_external_mcp_contracts_and_role_boundary(tmp_path):
             async with ClientSession(read,write) as session:
                 await session.initialize()
                 names={t.name for t in (await session.list_tools()).tools}
-                assert 'inspect_source_parse' not in names and 'publish' not in names and 'register_source' not in names and 'preview_build' not in names and 'revalidate_candidates' not in names
+                assert 'get_task_error' not in names and 'inspect_source_parse' not in names and 'publish' not in names and 'register_source' not in names and 'preview_build' not in names and 'revalidate_candidates' not in names
                 denied=await session.call_tool('publish',{'kb_id':kb,'build_id':str(uuid4())})
                 assert denied.isError
                 result=unpack(await session.call_tool('describe_kb',{'kb_id':kb}))

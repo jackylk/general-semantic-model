@@ -33,18 +33,22 @@ def test_pipeline_runs_all_sources_checkpoints_and_builds_cited_pages(tmp_path,m
             assert all(not b.get('locator',{}).get('requires_review') for b in data['untrusted_source_blocks'])
             block=data['untrusted_source_blocks'][0]['block_id']
             from test_build import candidates
-            return Completion({'candidates':candidates(block)},'test',{'total_tokens':10})
+            return Completion({'candidates':candidates(block)+[{'kind':'assertion','subject':{'bad':'shape'}}]},'test',{'total_tokens':10})
     monkeypatch.setattr(app,'llm',lambda:Model())
     task=app.tasks.submit(app.principal,kb,'pipeline',{'domain_version_id':dv,'source_version_ids':sources,'batch_chars':20000},'pipeline')
     done=app.execute_task(kb,task['id'])
     assert done['status']=='succeeded',done.get('error')
     result=done['checkpoint'];assert len(result['completed_batches'])==2 and result['coverage']['sources']==2
     assert len(result['excluded_record_ids'])==2
+    assert result['extraction_validation']['rejected_count']==2
+    assert len(result['extraction_rejections'])==2
     assert result['coverage']['blocks']==3 and result['coverage']['automatic_blocks']==2
     assert result['coverage']['deferred_blocks']==1 and len(result['deferred_block_ids'])==1
     assert result['build_id'] and result['coverage']['semantic_completeness']=='not_proven'
     rel=app.publish(kb,result['build_id'])
     assert (root/'releases'/rel/'manifest.json').exists()
+    manifest=json.loads((root/'releases'/rel/'manifest.json').read_text())
+    assert manifest['extraction_coverage']['rejected_count']==2 and 'raw_candidate' not in str(manifest)
     assert app.execute_task(kb,task['id'])['checkpoint']['build_id']==result['build_id']
 
 

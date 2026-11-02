@@ -64,7 +64,7 @@ def run(app,kb_id,task_id,payload,checkpoint):
         if not pending or pending['index']!=index:
             with phase('pipeline.extract'):
                 extracted=app.extract_candidates(kb_id,domain_id,batch,model,focus=payload.get('focus'))
-            records=extracted['result']['candidates'];pending={'index':index,'records':records,'extraction_usage':extracted['usage'],'extraction_notes':extracted.get('extraction_notes',[])};state['pending_batch']=pending;save('extracted')
+            records=extracted['result']['candidates'];pending={'index':index,'records':records,'extraction_usage':extracted['usage'],'extraction_notes':extracted.get('extraction_notes',[]),'extraction_rejections':extracted.get('extraction_rejections',[])};state['pending_batch']=pending;save('extracted')
         records=pending['records'];eligible=[r for r in records if r['status']=='verified']
         supported=[];reviews=[];usage={}
         if eligible:
@@ -72,6 +72,8 @@ def run(app,kb_id,task_id,payload,checkpoint):
             with phase('pipeline.support_review'):
                 reviews,usage=review_records(model,domain.model_dump(mode='json'),eligible,batch,pending,lambda:save('reviewing'))
             supported=[r['id'] for r in reviews if r['supported']]
+        state.setdefault('extraction_rejections',[]).extend({'batch_index':index,**r} for r in pending.get('extraction_rejections',[]))
+        state['extraction_validation']={'status':'partial_structural_validation' if state['extraction_rejections'] else 'structurally_validated_not_semantically_complete','rejected_count':len(state['extraction_rejections']),'semantic_completeness':'not_proven'}
         state.setdefault('supported_evidence_block_ids',[]).extend(e['block_id'] for r in records if r['id'] in supported for e in r['payload'].get('evidence',[]))
         state['candidate_ids'].extend(r['id'] for r in records);state['approved_record_ids'].extend(supported);state['excluded_record_ids'].extend(r['id'] for r in records if r['id'] not in supported)
         state.setdefault('batch_reports',[]).append({'index':index,'source_ids':sorted({b['source_version_id'] for b in batch}),'candidate_count':len(records),'support_reviews':reviews,'accepted_count':len(supported),'extraction_notes':pending.get('extraction_notes',[]),'method':'model_support_review_not_expert_confirmation'})
@@ -105,7 +107,7 @@ def run(app,kb_id,task_id,payload,checkpoint):
     state['selected_record_ids']=sorted(set(selected));state['excluded_record_ids']=sorted(set(state['excluded_record_ids']))
     if not selected:save('needs_correction');raise ProductError('NO_SUPPORTED_RECORDS','没有可构建的完整且获支持记录，请查看批次缺口并修正领域或资料')
     if not state.get('build_id'):
-        with phase('pipeline.build'):state['build_id']=app.build.finish(p,kb_id,domain_id,state['selected_record_ids'],source_parse_ids=[r['parse_version_id'] for r in state['document_coverage']])
+        with phase('pipeline.build'):state['build_id']=app.build.finish(p,kb_id,domain_id,state['selected_record_ids'],source_parse_ids=[r['parse_version_id'] for r in state['document_coverage']],extraction_coverage=state.get('extraction_validation'))
     state['status']='ready_for_preview_and_publication';save('build_ready')
     if app.workspace_root:
         from .artifacts import atomic,dump

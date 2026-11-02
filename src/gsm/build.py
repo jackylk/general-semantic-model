@@ -246,7 +246,7 @@ class BuildService:
         return {'build_id':build_id,'preview_only':True,'record_ids':[str(rid) for rid in build[0]],'matching_count':len(records),'records':records[offset:offset+limit],'offset':offset,'manifest':build[2]}
 
     @timed('build.index_and_wiki')
-    def finish(self,principal,kb_id,domain_version_id,record_ids,embed=True,source_parse_ids=None):
+    def finish(self,principal,kb_id,domain_version_id,record_ids,embed=True,source_parse_ids=None,extraction_coverage=None):
         from .search import tokenize
         from .adapters.embedding import Embedding
         from .releases import ReleaseService
@@ -292,9 +292,13 @@ class BuildService:
             from .wiki import render_wiki
             with phase('build.wiki'):
                 wiki=render_wiki(rows,domain,citations)
+                if extraction_coverage and extraction_coverage.get('rejected_count',0):
+                    warning='提取覆盖提示：部分模型候选格式不合法，已保留为未决诊断，未作为已核验事实发布。'
+                    wiki['limitations'].append(warning)
+                    for page in wiki['pages']:page['text']+='\n\n> '+warning+'\n'
                 if any(r['coverage'].get('status') in ('incomplete','legacy_unassessed') for r in document_coverage):
                     warning='解析覆盖提示：部分资料存在未识别区域或尚未评估的解析版本；已引用内容不代表完整覆盖。'
                     wiki['limitations'].append(warning)
                     for page in wiki['pages']:page['text']+='\n\n> '+warning+'\n'
-            conn.execute('UPDATE builds SET ready=true,manifest=%s WHERE kb_id=%s AND id=%s',(Jsonb({'domain_version_id':domain_version_id,'wiki':wiki,'document_coverage':document_coverage,'support_snapshot':[str(row[0]) for row in active],'vector_ready':embed,'baseline_block_ids':[str(r[0]) for r in source_blocks]}),kb_id,build_id))
+            conn.execute('UPDATE builds SET ready=true,manifest=%s WHERE kb_id=%s AND id=%s',(Jsonb({'domain_version_id':domain_version_id,'wiki':wiki,'document_coverage':document_coverage,'extraction_coverage':extraction_coverage or {},'support_snapshot':[str(row[0]) for row in active],'vector_ready':embed,'baseline_block_ids':[str(r[0]) for r in source_blocks]}),kb_id,build_id))
         return build_id

@@ -98,7 +98,7 @@ class Application:
             if not isinstance(focus,str) or not focus.strip() or len(focus)>4000:raise ProductError('INVALID_FOCUS','抽取重点必须为不超过4000字符的文本')
             prompt['extraction_focus']=focus
             prompt['focus_boundary']='重点仅限定当前领域和授权来源内的抽取范围，不得改变Schema、证据门禁、身份或条件要求。'
-        allowed=set(aliases.values());by_block={b['block_id']:b for b in blocks};usage={};attempts=[]
+        allowed=set(aliases.values());by_block={b['block_id']:b for b in blocks};usage={};attempts=[];final_rejections=[]
         for attempt in range(2):
             try:response=llm.complete(json.dumps(prompt,ensure_ascii=False,separators=(',',':')))
             except ProductError as error:
@@ -113,43 +113,47 @@ class Application:
                 continue
             for key,value in response.usage.items():
                 if isinstance(value,int):usage[key]=usage.get(key,0)+value
-            raw=response.data.get('candidates');errors=[];normalized=[]
+            raw=response.data.get('candidates');errors=[];normalized=[];rejections=[]
             if not isinstance(raw,list):errors.append({'path':'candidates','reason':'必须为候选数组'})
             else:
                 for index,candidate in enumerate(raw):
                     try:typed=Candidate.model_validate(candidate)
                     except ValidationError as error:
-                        errors.extend({'path':f'candidates.{index}.'+'.'.join(map(str,e['loc'])),'reason':e['msg']} for e in error.errors(include_input=False,include_url=False))
+                        item_errors=[{'path':f'candidates.{index}.'+'.'.join(map(str,e['loc'])),'reason':e['msg'],'type':e['type']} for e in error.errors(include_input=False,include_url=False)]
+                        errors.extend(item_errors);rejections.append({'index':index,'raw_candidate':candidate,'errors':item_errors})
                         continue
-                    item=typed.model_dump(mode='json')
+                    item=typed.model_dump(mode='json');item_errors=[]
                     for evidence in item['evidence']:
                         original=aliases.get(evidence['block_id'],evidence['block_id'])
-                        if original not in allowed:errors.append({'path':f'candidates.{index}.evidence.block_id','reason':'只能引用当前样本给出的 Bxxxx 标识'})
+                        if original not in allowed:item_errors.append({'path':f'candidates.{index}.evidence.block_id','reason':'只能引用当前样本给出的 Bxxxx 标识','type':'evidence_scope'})
                         evidence['block_id']=original
                         source=by_block.get(original,{})
                         if source.get('locator',{}).get('unit_type')=='table_row' and evidence['quote'] and evidence['quote'] in source['text']:
                             # A cell fragment alone loses its header, units and scope.
                             # Cite the complete parser-derived row, not invented prose.
                             evidence['quote']=source['text']
-                    normalized.append(item)
+                    if item_errors:errors.extend(item_errors);rejections.append({'index':index,'raw_candidate':candidate,'errors':item_errors})
+                    else:normalized.append(item)
             if errors:
-                attempts.append({'candidate_ids':[],'invalid_count':len(errors)})
-                if attempt==1:raise ProductError('INVALID_EXTRACTION','模型候选结构或证据标识仍不合法',errors)
-                prompt['repair']={'instruction':'修正结构和证据标识，重新返回完整候选数组，不得编造事实。','previous_candidates':raw,'errors':errors}
-                continue
+                if attempt==0:
+                    attempts.append({'candidate_ids':[],'invalid_count':len(errors)})
+                    prompt['repair']={'instruction':'修正结构和证据标识，重新返回完整候选数组，不得编造事实。','previous_candidates':raw,'errors':errors}
+                    continue
+                if not normalized:raise ProductError('INVALID_EXTRACTION','模型候选仍全部不合法，未生成可核验记录',errors)
+                final_rejections=rejections
             if not normalized and attempt==0:
                 attempts.append({'candidate_ids':[],'invalid_count':0,'coverage':'empty'})
                 prompt['repair']={'instruction':'上次未返回候选。请再次核对样本与抽取目标；若确实无相关内容可返回空数组并说明 extraction_notes，不得编造。'}
                 continue
             result=self.build.ingest(self.principal,kb_id,domain_id,normalized)
             invalid=[{'candidate':c['payload'],'issues':c['issues']} for c in result['candidates'] if any(i['fatal'] for i in c['issues'])]
-            attempts.append({'candidate_ids':[c['id'] for c in result['candidates']],'invalid_count':len(invalid)})
+            attempts.append({'candidate_ids':[c['id'] for c in result['candidates']],'invalid_count':len(invalid),'structural_rejected_count':len(final_rejections)})
             if not invalid:break
             if attempt==0:
                 from .review import ReviewService
                 ReviewService(self.store).decide(self.principal,kb_id,[c['id'] for c in result['candidates']],'reject','系统自动纠错替代本次尝试，非人工业务确认')
             prompt['repair']={'instruction':'按具体错误修正整个候选批次。不能补造证据或身份；资料无法确定的保留未决。','previous_candidates':raw,'errors':invalid}
-        return {'result':result,'usage':usage,'model':response.model,'attempts':len(attempts),'attempt_log':attempts,'coverage':'empty' if not result['candidates'] else 'candidates_returned','extraction_notes':response.data.get('extraction_notes',[])}
+        return {'result':result,'usage':usage,'model':response.model,'attempts':len(attempts),'attempt_log':attempts,'coverage':'partial_structural_validation' if final_rejections else ('empty' if not result['candidates'] else 'candidates_returned'),'extraction_rejections':final_rejections,'extraction_notes':response.data.get('extraction_notes',[])}
 
     @timed('task.execute')
     def execute_task(self,kb_id,task_id):

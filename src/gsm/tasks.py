@@ -39,11 +39,18 @@ class TaskService:
     def status(self,principal,kb_id,task_id):
         principal.require(kb_id,write=True)
         array_count=lambda name: "jsonb_array_length(CASE WHEN jsonb_typeof(checkpoint->'"+name+"')='array' THEN checkpoint->'"+name+"' ELSE '[]'::jsonb END)"
-        query="SELECT id,kind,status,stage,error,"+array_count('completed_batches')+",CASE WHEN jsonb_typeof(checkpoint->'coverage')='object' THEN checkpoint->'coverage'->'planned_batches' ELSE NULL END,"+array_count('candidate_ids')+",checkpoint->>'build_id' FROM tasks WHERE kb_id=%s AND id=%s"
+        query="SELECT id,kind,status,stage,CASE WHEN error IS NULL THEN NULL ELSE jsonb_build_object('code',error->'code','message',error->'message','retryable',error->'retryable') END,"+array_count('completed_batches')+",CASE WHEN jsonb_typeof(checkpoint->'coverage')='object' THEN checkpoint->'coverage'->'planned_batches' ELSE NULL END,"+array_count('candidate_ids')+",checkpoint->>'build_id' FROM tasks WHERE kb_id=%s AND id=%s"
         with self.store.transaction(principal,kb_id) as conn:row=conn.execute(query,(kb_id,task_id)).fetchone()
         if not row:raise ProductError('NOT_FOUND','任务不存在或无权限')
-        return {'id':str(row[0]),'kind':row[1],'status':row[2],'stage':row[3],'error':row[4],
+        return {'id':str(row[0]),'kind':row[1],'status':row[2],'stage':row[3],'error':({k:v for k,v in row[4].items() if k in ('code','message','retryable')} if row[4] else None),
             'progress':{'completed_batches':row[5],'planned_batches':row[6],'candidate_count':row[7],'build_id':row[8]}}
+
+    def get_error(self,principal,kb_id,task_id):
+        principal.require(kb_id,write=True)
+        with self.store.transaction(principal,kb_id) as conn:
+            row=conn.execute('SELECT error FROM tasks WHERE kb_id=%s AND id=%s',(kb_id,task_id)).fetchone()
+        if not row:raise ProductError('NOT_FOUND','任务不存在或无权限')
+        return row[0]
 
     def checkpoint(self,principal,kb_id,task_id,stage,checkpoint):
         principal.require(kb_id,write=True)
@@ -51,10 +58,10 @@ class TaskService:
             cursor=conn.execute("UPDATE tasks SET stage=%s,checkpoint=%s,status='running',error=NULL,updated_at=now() WHERE kb_id=%s AND id=%s",(stage,Jsonb(checkpoint),kb_id,task_id))
             if not cursor.rowcount: raise ProductError('NOT_FOUND','任务不存在或无权限')
 
-    def fail(self,principal,kb_id,task_id,code,message,retryable=False):
+    def fail(self,principal,kb_id,task_id,code,message,retryable=False,details=None):
         principal.require(kb_id,write=True)
         with self.store.transaction(principal,kb_id) as conn:
-            cursor=conn.execute("UPDATE tasks SET status='failed',error=%s,updated_at=now() WHERE kb_id=%s AND id=%s",(Jsonb({'code':code,'message':message,'retryable':retryable}),kb_id,task_id))
+            cursor=conn.execute("UPDATE tasks SET status='failed',error=%s,updated_at=now() WHERE kb_id=%s AND id=%s",(Jsonb({'code':code,'message':message,'retryable':retryable,'details':json.loads(json.dumps(details or [],default=str))}),kb_id,task_id))
             if not cursor.rowcount: raise ProductError('NOT_FOUND','任务不存在或无权限')
 
     def retry(self,principal,kb_id,task_id):

@@ -41,9 +41,12 @@ class ReleaseService:
             supported={str(e[1]) for e in evidence}
             if supported!=set(record_ids):
                 raise ProductError('EVIDENCE_REQUIRED','记录缺少有效来源支持')
+            scope_parse_ids={str(e[3]) for e in evidence} | {item['parse_version_id'] for item in build[2].get('document_coverage',[])}
+            scope=conn.execute('SELECT p.id,p.source_version_id FROM parse_versions p WHERE p.kb_id=%s AND p.id=ANY(%s::uuid[]) AND NOT EXISTS(SELECT 1 FROM source_withdrawals w WHERE w.kb_id=p.kb_id AND w.source_version_id=p.source_version_id)',(kb_id,sorted(scope_parse_ids))).fetchall()
+            if len(scope)!=len(scope_parse_ids):raise ProductError('BUILD_STALE','构建范围内的来源支持已变化，请重新构建再发布')
             manifest={**build[2], 'record_ids':record_ids,'evidence_ids':[str(e[0]) for e in evidence],
-                'block_ids':sorted({str(e[2]) for e in evidence}),'parse_version_ids':sorted({str(e[3]) for e in evidence}),
-                'source_version_ids':sorted({str(e[4]) for e in evidence})}
+                'block_ids':sorted({str(e[2]) for e in evidence}),'parse_version_ids':sorted(str(row[0]) for row in scope),
+                'source_version_ids':sorted({str(row[1]) for row in scope})}
             from uuid import uuid4
             release=str(uuid4())
             if self.workspace_root:

@@ -166,6 +166,11 @@ def create_server(app:Application):
         return app.tasks.status(p,kb_id,task_id)
 
     @tool
+    def get_task_error(kb_id:str,task_id:str)->dict:
+        """仅建库者：读取失败诊断，不拉取巨大检查点；详情可能包含领域数据。"""
+        return {'task_id':task_id,'error':app.tasks.get_error(p,kb_id,task_id)}
+
+    @tool
     def cancel_task(kb_id:str,task_id:str)->dict:
         return app.tasks.cancel(p,kb_id,task_id)
 

@@ -104,3 +104,39 @@ def test_unreviewed_derived_rows_do_not_bypass_gate_through_source_index(build_e
         manifest=c.execute('SELECT manifest FROM builds WHERE kb_id=%s AND id=%s',(kb,bid)).fetchone()[0]
         assert extra['blocks'][0]['id'] not in manifest['baseline_block_ids']
         assert len(manifest['document_coverage'])==2
+
+
+def test_partial_structural_extraction_is_visible_without_exporting_bad_candidates(build_env):
+    from test_build import candidates
+    store,build,review,p,kb,dv,block=build_env;result=build.ingest(p,kb,dv,candidates(block))
+    bid=build.finish(p,kb,dv,[c['id'] for c in result['candidates']],embed=False,extraction_coverage={'status':'partial_structural_validation','rejected_count':2})
+    with store.transaction(p,kb) as c:m=c.execute('SELECT manifest FROM builds WHERE kb_id=%s AND id=%s',(kb,bid)).fetchone()[0]
+    assert m['extraction_coverage']['rejected_count']==2
+    assert 'raw_candidate' not in str(m)
+    assert all('提取覆盖提示' in page['text'] for page in m['wiki']['pages'])
+
+
+def test_published_source_catalog_includes_full_processed_corpus_not_only_fact_sources(build_env):
+    from test_build import candidates
+    from gsm.sources import SourceService
+    from gsm.releases import ReleaseService
+    store,build,review,p,kb,dv,block=build_env;src=SourceService(store)
+    file=store.settings.source_root/'extra.txt';file.write_text('Additional source without extracted facts.')
+    extra=src.import_file(p,kb,file.name);parsed=src.save_parse(p,kb,extra['id'],'test',[{'text':file.read_text()}])
+    result=build.ingest(p,kb,dv,candidates(block));bid=build.finish(p,kb,dv,[r['id'] for r in result['candidates']],embed=False,source_parse_ids=[parsed['id']])
+    rel=ReleaseService(store).publish(p,kb,bid)
+    with store.transaction(p,kb) as c:m=c.execute('SELECT manifest FROM releases WHERE kb_id=%s AND id=%s',(kb,rel)).fetchone()[0]
+    assert extra['id'] in m['source_version_ids'] and parsed['id'] in m['parse_version_ids']
+
+
+def test_withdrawing_a_source_without_facts_also_invalidates_pending_publication(build_env):
+    from test_build import candidates
+    from gsm.sources import SourceService
+    from gsm.releases import ReleaseService
+    store,build,review,p,kb,dv,block=build_env;src=SourceService(store)
+    file=store.settings.source_root/'extra.txt';file.write_text('Additional source without extracted facts.')
+    extra=src.import_file(p,kb,file.name);parsed=src.save_parse(p,kb,extra['id'],'test',[{'text':file.read_text()}])
+    result=build.ingest(p,kb,dv,candidates(block));bid=build.finish(p,kb,dv,[r['id'] for r in result['candidates']],embed=False,source_parse_ids=[parsed['id']])
+    src.withdraw(p,kb,extra['id'])
+    with pytest.raises(ProductError) as e:ReleaseService(store).publish(p,kb,bid)
+    assert e.value.code=='BUILD_STALE'
