@@ -52,3 +52,15 @@ def grounded(value,definition,text):
     if typ=='interval':return str(value.get('start')) in text and str(value.get('end')) in text
     if typ=='boolean':return ('true' if value else 'false') in text.lower()
     return re.sub(r'\s+',' ',str(value)).strip() in re.sub(r'\s+',' ',text)
+
+
+def locate_quote(text,quote):
+    """Exact text, allowing only CR/LF transport differences; return original offsets."""
+    start=text.find(quote)
+    if start>=0:return start,start+len(quote)
+    normalized=quote.replace('\r\n','\n').replace('\r','\n')
+    spans=list(re.finditer(r'\r\n|\r|[^\r]',text))
+    canonical=''.join('\n' if m.group().startswith('\r') else m.group() for m in spans)
+    start=canonical.find(normalized)
+    if start<0 or not normalized:return None
+    return spans[start].start(),spans[start+len(normalized)-1].end()

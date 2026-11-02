@@ -170,8 +170,13 @@ class BuildService:
                 links=[]
                 for e in c.evidence:
                     row=conn.execute('SELECT text FROM source_blocks WHERE kb_id=%s AND id=%s',(kb_id,e.block_id)).fetchone()
-                    if not row or e.quote not in row[0]: add('EVIDENCE_NOT_LOCATED')
-                    else: links.append((e,row[0].index(e.quote)))
+                    from .grounding import locate_quote
+                    span=locate_quote(row[0],e.quote) if row else None
+                    if span is None:add('EVIDENCE_NOT_LOCATED')
+                    else:
+                        e.quote=row[0][span[0]:span[1]]
+                        links.append((e,span[0]))
+                payload['evidence']=[e.model_dump(mode='json') for e in c.evidence]
                 if c.provenance in ('source_statement','observation'):
                     from .grounding import grounded,numbers,quantities
                     quotes='\n'.join(e.quote for e,_ in links)
@@ -199,6 +204,21 @@ class BuildService:
             AND COALESCE(d.decision,'')<>'reject' AND (r.status IN ('verified','confirmed') OR d.decision='confirm')
             AND EXISTS(SELECT 1 FROM evidence_links e JOIN source_blocks b ON b.kb_id=e.kb_id AND b.id=e.block_id JOIN parse_versions p ON p.kb_id=b.kb_id AND p.id=b.parse_version_id
                 WHERE e.kb_id=r.kb_id AND e.record_id=r.id AND NOT EXISTS(SELECT 1 FROM source_withdrawals w WHERE w.kb_id=p.kb_id AND w.source_version_id=p.source_version_id))""",(kb_id,kind,domain_version_id)).fetchall()
+
+    def revalidate(self,principal,kb_id,domain_version_id,candidate_ids):
+        principal.require(kb_id,write=True)
+        if not 1<=len(candidate_ids)<=200 or len(set(candidate_ids))!=len(candidate_ids):raise ProductError('INVALID_LIMIT','重核验必须选择1–200条不重复候选')
+        with self.store.transaction(principal,kb_id) as conn:
+            rows=conn.execute("""SELECT r.id,r.payload,d.decision FROM records r
+                LEFT JOIN LATERAL (SELECT decision FROM review_decisions WHERE kb_id=r.kb_id AND record_id=r.id ORDER BY created_at DESC,id DESC LIMIT 1) d ON true
+                WHERE r.kb_id=%s AND r.id=ANY(%s::uuid[]) AND r.payload->>'domain_version_id'=%s""",(kb_id,candidate_ids,domain_version_id)).fetchall()
+        if len(rows)!=len(candidate_ids):raise ProductError('NOT_FOUND','候选缺失、越权或领域版本不匹配')
+        if any(row[2]=='reject' for row in rows):raise ProductError('REVIEW_REQUIRED','已拒绝候选不能通过重核验恢复')
+        by_id={str(row[0]):row[1] for row in rows}
+        payloads=[{key:value for key,value in by_id[rid].items() if key in Candidate.model_fields} for rid in candidate_ids]
+        result=self.ingest(principal,kb_id,domain_version_id,payloads)
+        result['revalidated_from']=dict(zip(candidate_ids,[c['id'] for c in result['candidates']]))
+        return result
 
     def preview(self,principal,kb_id,build_id,kind=None,conditions=None,limit=100,offset=0):
         principal.require(kb_id,write=True)

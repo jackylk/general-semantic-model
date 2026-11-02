@@ -115,6 +115,9 @@ class Application:
             if sum(len(b['text']) for b in blocks)>100000:
                 raise ProductError('SAMPLE_TOO_LARGE','首版单次预览限 10 万字符，请选择更小的样本批次')
             return self.extract_candidates(kb_id,domain_id,blocks,self.llm())
+        def revalidate(payload,checkpoint):
+            if checkpoint.get('result'):return checkpoint
+            return {'result':self.build.revalidate(self.principal,kb_id,payload['domain_version_id'],payload['candidate_ids']),'model':None,'usage':{}}
         def finish(payload,checkpoint):
             return {'build_id':self.build.finish(self.principal,kb_id,payload['domain_version_id'],payload['candidate_ids'])}
         def analyze(payload,checkpoint):
@@ -128,4 +131,4 @@ class Application:
         def evaluate(payload,checkpoint):
             from .evaluation import EvaluationService
             return EvaluationService(self.store,self.llm()).run(self.principal,kb_id,payload['release_id'],payload['dataset'],payload['mode'])
-        return Worker(self.tasks,{'extract':extract,'build':finish,'analyze':analyze,'evaluate':evaluate}).run(self.principal,kb_id,task_id)
+        return Worker(self.tasks,{'extract':extract,'revalidate':revalidate,'build':finish,'analyze':analyze,'evaluate':evaluate}).run(self.principal,kb_id,task_id)

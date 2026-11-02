@@ -259,3 +259,20 @@ def test_build_preview_filters_conditions_before_publish_without_releasing(build
     reader=Principal('consumer',frozenset([kb]))
     with pytest.raises(ProductError):b.preview(reader,kb,bid)
     with pytest.raises(ProductError):b.preview(p,kb,str(uuid4()))
+
+
+def test_revalidation_uses_existing_payload_without_llm_and_keeps_original(build_env,monkeypatch):
+    import gsm.grounding as grounding
+    store,b,review,p,kb,dv,block=build_env
+    original=grounding.grounded
+    monkeypatch.setattr(grounding,'grounded',lambda *args:False)
+    old=b.ingest(p,kb,dv,candidates(block));assert old['candidates'][-1]['status']=='candidate'
+    monkeypatch.setattr(grounding,'grounded',original)
+    ids=[r['id'] for r in old['candidates']];new=b.revalidate(p,kb,dv,ids)
+    assert all(r['status']=='verified' for r in new['candidates'])
+    assert not set(ids)&{r['id'] for r in new['candidates']}
+    with store.transaction(p,kb) as conn:
+        assert conn.execute('SELECT status FROM records WHERE kb_id=%s AND id=%s',(kb,ids[-1])).fetchone()[0]=='candidate'
+    review.decide(p,kb,[ids[0]],'reject','business decision')
+    with pytest.raises(ProductError):b.revalidate(p,kb,dv,ids)
+    with pytest.raises(ProductError):b.revalidate(Principal('consumer',frozenset([kb])),kb,dv,ids)

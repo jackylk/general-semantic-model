@@ -28,3 +28,13 @@ def test_text_condition_allows_layout_whitespace_without_crossing_table_rows():
     assert grounded(phrase,definition,'Warranty period (time or mileage, whichever\ncomes first)')
     assert not grounded(phrase,definition,'<table><tr><td>time or mileage, whichever</td></tr><tr><td>comes first</td></tr></table>')
     assert not grounded(phrase,definition,'time or mileage, whichever comes last')
+
+
+def test_quote_newline_mapping_preserves_actual_source_offsets():
+    from gsm.grounding import locate_quote
+    text='prefix: Warranty period\nwhichever comes first. end'
+    span=locate_quote(text,'Warranty period\r\nwhichever comes first.')
+    assert span and text[span[0]:span[1]]=='Warranty period\nwhichever comes first.'
+    assert locate_quote(text,'Warranty period whichever comes first.') is None
+    reverse='x:A\r\nB!';span=locate_quote(reverse,'A\nB')
+    assert reverse[span[0]:span[1]]=='A\r\nB'

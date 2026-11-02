@@ -80,6 +80,11 @@ def create_server(app:Application):
     if role!='developer':return mcp
 
     @tool
+    def revalidate_candidates(kb_id:str,domain_version_id:str,candidate_ids:list[str],idempotency_key:str)->dict:
+        """用当前核验器重核验现有候选，不调用模型或接受手填事实；创建新候选并保留原候选。"""
+        return app.tasks.submit(p,kb_id,'revalidate',{'domain_version_id':domain_version_id,'candidate_ids':candidate_ids},idempotency_key)
+
+    @tool
     def preview_build(kb_id:str,build_id:str,kind:str|None=None,conditions:dict|None=None,limit:int=100,offset:int=0)->dict:
         """发布前只读检查已就绪构建、条件筛选及 Wiki；不创建发布版或切换当前版本。"""
         return app.build.preview(p,kb_id,build_id,kind,conditions,limit,offset)
