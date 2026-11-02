@@ -85,7 +85,8 @@ class Application:
     def extract_candidates(self,kb_id,domain_id,blocks,llm,focus=None):
         domain=self.build.get_domain(self.principal,kb_id,domain_id)
         aliases={f'B{i+1:04d}':block['block_id'] for i,block in enumerate(blocks)}
-        visible=[{**block,'block_id':f'B{i+1:04d}'} for i,block in enumerate(blocks)]
+        from .source_context import source_context
+        visible=[{**source_context(block),'block_id':f'B{i+1:04d}'} for i,block in enumerate(blocks)]
         schema=Candidate.model_json_schema()
         schema['$defs']['EvidenceInput']['properties']['block_id']['enum']=list(aliases)
         prompt={'task':'抽取语义候选，返回 JSON 对象 {"candidates":[]}。先列 object，再列 assertion/relation/event/rule。local_id 用于批次内引用；identity 只含领域身份属性。evidence 必须是数组，每项是输入块 block_id 短标识和逐字 quote，不能写页码或编造块 ID。quantity 必须是 {"value":"10.25","unit":"W"}。decimal 用十进制字符串。缺失条件不得猜测。',
@@ -96,7 +97,7 @@ class Application:
             prompt['focus_boundary']='重点仅限定当前领域和授权来源内的抽取范围，不得改变Schema、证据门禁、身份或条件要求。'
         allowed=set(aliases.values());usage={};attempts=[]
         for attempt in range(2):
-            try:response=llm.complete(json.dumps(prompt,ensure_ascii=False))
+            try:response=llm.complete(json.dumps(prompt,ensure_ascii=False,separators=(',',':')))
             except ProductError as error:
                 if error.code!='INVALID_MODEL_OUTPUT':raise
                 for detail in error.details:
