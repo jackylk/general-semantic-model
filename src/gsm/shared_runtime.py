@@ -58,10 +58,10 @@ def services(root):
                 token=secrets.token_urlsafe(32);tokenfile=operator/(role+'.token');tokenfile.write_text(token);tokenfile.chmod(0o600)
                 sock=socket.socket();sock.bind(('127.0.0.1',0));sock.listen();port=sock.getsockname()[1]
                 log=(operator/(role+'.log')).open('a')
-                process=subprocess.Popen([sys.executable,'-m','gsm.shared_runtime','--credentials',str(operator/(role+'.json')),'--token-file',str(tokenfile),'--fd',str(sock.fileno())],cwd=product,pass_fds=(sock.fileno(),),stdout=log,stderr=log,env=env,start_new_session=True);sock.close();log.close()
+                process=subprocess.Popen([sys.executable,'-m','gsm.shared_runtime','--credentials',str(operator/(role+'.json')),'--token-file',str(tokenfile),'--fd',str(sock.fileno())],cwd=product,pass_fds=(sock.fileno(),),stdout=log,stderr=log,env={**env,'GSM_TIMING_ROLE':'developer' if role=='producer' else 'consumer'},start_new_session=True);sock.close();log.close()
                 state[role]={'pid':process.pid,'url':f'http://127.0.0.1:{port}/mcp','token':token}
             log=(operator/'worker.log').open('a')
-            process=subprocess.Popen([sys.executable,'-m','gsm.cli','worker','--credentials',str(operator/'producer.json')],cwd=product,stdout=log,stderr=log,env=env,start_new_session=True);log.close();state['worker']={'pid':process.pid}
+            process=subprocess.Popen([sys.executable,'-m','gsm.cli','worker','--credentials',str(operator/'producer.json')],cwd=product,stdout=log,stderr=log,env={**env,'GSM_TIMING_ROLE':'worker'},start_new_session=True);log.close();state['worker']={'pid':process.pid}
             for _ in range(100):
                 if healthy(state):break
                 time.sleep(.1)

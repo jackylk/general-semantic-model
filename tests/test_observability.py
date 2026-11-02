@@ -67,3 +67,40 @@ def test_domain_vocabulary_compacts_defaults_but_keeps_constraints_and_unknown_i
     assert prop['units']==['W'] and prop['required_conditions']==['temperature']
     assert 'aliases' not in prop and 'enum_values' not in prop and 'unit_aliases' not in prop
     assert result['conditions'][0]['enum_values']==['X']
+
+
+def test_model_usage_ledger_logs_tokens_and_context_without_content(tmp_path,monkeypatch):
+    from gsm.adapters.llm import LLM
+    from gsm.observability import phase
+    import gsm.adapters.llm as module
+    usage=tmp_path/'usage.jsonl';monkeypatch.setenv('GSM_LLM_USAGE_LOG',str(usage))
+    monkeypatch.setattr(module,'post_json',lambda *a,**k:{'choices':[{'message':{'content':'{"secret":"private output"}'},'finish_reason':'stop'}],'usage':{'prompt_tokens':11,'completion_tokens':5,'total_tokens':16,'prompt_cache_hit_tokens':3},'model':'deepseek-flash'})
+    with phase('pipeline.extract',{'kb_id':'kb','task_id':'task'}):
+        LLM('https://example.invalid','deepseek-flash','private key').complete('private input')
+    row=json.loads(usage.read_text())
+    assert row['usage']['total_tokens']==16 and row['context']['task_id']=='task'
+    assert row['operation']=='pipeline.extract' and row['outcome']=='completed'
+    assert 'private' not in usage.read_text()
+
+
+def test_model_usage_ledger_counts_returned_tokens_on_invalid_output(tmp_path,monkeypatch):
+    from gsm.adapters.llm import LLM
+    import gsm.adapters.llm as module
+    import pytest
+    path=tmp_path/'usage.jsonl';monkeypatch.setenv('GSM_LLM_USAGE_LOG',str(path))
+    monkeypatch.setattr(module,'post_json',lambda *a,**k:{'choices':[{'message':{'content':'private broken json'},'finish_reason':'length'}],'usage':{'prompt_tokens':12,'completion_tokens':7,'total_tokens':19}})
+    with pytest.raises(ProductError):LLM('https://example.invalid','deepseek-flash','secret').complete('private input')
+    row=json.loads(path.read_text());assert row['usage']['total_tokens']==19 and row['outcome']=='invalid_output'
+    assert row['usage_available'] is True and 'private' not in path.read_text()
+
+
+def test_model_usage_ledger_marks_unreported_usage_as_unknown(tmp_path,monkeypatch):
+    import pytest
+    from gsm.adapters.llm import LLM
+    import gsm.adapters.llm as module
+    target=tmp_path/'usage.jsonl';monkeypatch.setenv('GSM_LLM_USAGE_LOG',str(target))
+    def fail(*a,**k):raise ProductError('UPSTREAM_HTTP','private provider message')
+    monkeypatch.setattr(module,'post_json',fail)
+    with pytest.raises(ProductError):LLM('https://example.invalid','deepseek-flash','secret').complete('private input')
+    row=json.loads(target.read_text());assert row['usage_available'] is False and row['usage']=={}
+    assert row['outcome']=='request_error' and 'private' not in target.read_text()
