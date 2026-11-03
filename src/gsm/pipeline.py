@@ -68,7 +68,11 @@ def run(app,kb_id,task_id,payload,checkpoint):
         pending=state.get('pending_batch')
         if not pending or pending['index']!=index:
             with phase('pipeline.extract'):
-                extracted=app.extract_candidates(kb_id,domain_id,batch,model,focus=payload.get('focus'))
+                from .adaptive_extraction import adaptive_extract
+                partition=state.setdefault('extraction_partition',{'index':index,'state':{}})
+                if partition['index']!=index:partition={'index':index,'state':{}};state['extraction_partition']=partition
+                extracted=adaptive_extract(app,kb_id,domain_id,batch,model,partition['state'],lambda:save('extracting'),focus=payload.get('focus'))
+                state.pop('extraction_partition',None)
             records=extracted['result']['candidates'];pending={'index':index,'records':records,'extraction_usage':extracted['usage'],'extraction_notes':extracted.get('extraction_notes',[]),'extraction_rejections':extracted.get('extraction_rejections',[])};state['pending_batch']=pending;save('extracted')
         records=pending['records'];eligible=[r for r in records if r['status']=='verified']
         supported=[];reviews=[];usage={}

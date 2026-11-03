@@ -108,8 +108,10 @@ class Application:
                     for key,value in detail.get('usage',{}).items():
                         if isinstance(value,int):usage[key]=usage.get(key,0)+value
                 attempts.append({'candidate_ids':[],'invalid_count':1,'error':error.code})
+                if any(isinstance(d,dict) and d.get('reason')=='truncated' for d in error.details):
+                    raise ProductError(error.code,'输出截断，需要拆小完整原文批次',[{'reason':'truncated','usage':usage}],retryable=True) from None
                 if attempt==1:
-                    raise ProductError(error.code,'模型两次未返回完整 JSON，请缩小样本后重试',error.details,retryable=True) from None
+                    raise ProductError(error.code,'模型两次未返回完整 JSON，请缩小样本后重试',[{'reason':'empty_or_invalid_json','usage':usage}],retryable=True) from None
                 prompt['repair']={'instruction':'上次输出不是完整 JSON。请返回紧凑的合法对象，省略可选空字段，保留必需证据与条件，不得编造或以截断内容作为事实。'}
                 continue
             for key,value in response.usage.items():

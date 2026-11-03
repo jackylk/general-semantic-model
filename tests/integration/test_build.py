@@ -240,7 +240,7 @@ def test_extraction_retries_invalid_json_with_bounded_attempts(build_env):
         def __init__(self,always=False):self.calls=0;self.always=always
         def complete(self,*args,**kwargs):
             self.calls+=1
-            if self.calls==1 or self.always:raise ProductError('INVALID_MODEL_OUTPUT','bad JSON',[{'reason':'truncated','usage':{'total_tokens':10}}])
+            if self.calls==1 or self.always:raise ProductError('INVALID_MODEL_OUTPUT','bad JSON',[{'reason':'empty_or_invalid_json','usage':{'total_tokens':10}}])
             return Completion({'candidates':candidates(block)},'test',{'total_tokens':5})
     model=Model();result=app.extract_candidates(kb,dv,[{'block_id':block,'text':'test'}],model)
     assert model.calls==2 and result['usage']['total_tokens']==15
@@ -331,3 +331,18 @@ def test_wrong_batch_evidence_is_rejected_even_when_another_candidate_is_valid(b
     result=app.extract_candidates(kb,dv,[{'block_id':block,'text':'设备 A 序号 001','locator':{}}],Model())
     assert len(result['result']['candidates'])==1 and len(result['extraction_rejections'])==1
     assert result['extraction_rejections'][0]['errors'][0]['type']=='evidence_scope'
+
+
+def test_truncated_extraction_requests_partition_without_identical_retry(build_env):
+    from gsm.application import Application
+    store,b,_,p,kb,dv,block=build_env
+    app=object.__new__(Application);app.store=store;app.principal=p;app.build=b
+    class Model:
+        calls=0
+        def complete(self,*a,**kw):
+            self.calls+=1
+            raise ProductError('INVALID_MODEL_OUTPUT','length',[{'reason':'truncated','usage':{'total_tokens':11}}],True)
+    model=Model()
+    with pytest.raises(ProductError) as exc:app.extract_candidates(kb,dv,[{'block_id':block,'text':'synthetic'}],model)
+    assert model.calls==1 and exc.value.details[0]['usage']['total_tokens']==11
+    assert exc.value.details[0]['reason']=='truncated'
