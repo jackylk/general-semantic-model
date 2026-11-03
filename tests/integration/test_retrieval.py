@@ -240,3 +240,28 @@ def test_retrieval_repairs_bad_tool_argument_instead_of_failing_entire_question(
     assert result['status']=='insufficient'
     assert result['trace'][0]['error']['code']=='INVALID_TOOL_ARGUMENT'
     assert not result['trace'][0]['executed']
+
+
+@pytest.mark.parametrize('bad_plan',[
+    {'action':'delete_records','args':{}},
+    {'action':'search','args':{'query':'synthetic','unexpected':True}},
+    {'action':['search'],'args':{}},
+    {'action':'search','args':[]},
+])
+def test_invalid_plan_is_not_executed_and_can_be_corrected(build_env,bad_plan):
+    import json
+    from gsm.retrieval import RetrievalService
+    from gsm.adapters.llm import Completion
+    store,_,_,p,kb,_,_=build_env;_,release=publish(build_env)
+    class Model:
+        calls=0
+        def complete(self,prompt,**kwargs):
+            self.calls+=1
+            if self.calls==1:return Completion(bad_plan,'test',{'total_tokens':7})
+            history=json.loads(prompt)['history']
+            assert history[-1]['result']['code']=='INVALID_TOOL_PLAN'
+            return Completion({'action':'finish','status':'insufficient','answer':'资料不足','citations':[]},'test',{'total_tokens':3})
+    result=RetrievalService(store,Model(),max_rounds=3).retrieve(p,kb,release,'合成问题')
+    assert result['status']=='insufficient' and result['total_tokens']==10
+    assert not result['trace'][0]['executed']
+    assert result['trace'][0]['error']['code']=='INVALID_TOOL_PLAN'

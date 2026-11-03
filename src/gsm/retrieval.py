@@ -153,7 +153,11 @@ class RetrievalService:
                 return {'answer':plan.get('answer',''),'status':status,'citations':citations,'kb_id':kb_id,'release_id':release_id,'trace':trace,'support_check':check,'total_tokens':tokens,'elapsed_ms':round((perf_counter()-started)*1000,3)}
             allowed={'search':{'query','limit'},'query_records':{'kind','subject','predicate','conditions','limit'},'query_paths':{'start','target','max_depth','limit'},'list_wiki_pages':set(),'read_wiki':{'page'},'read_evidence':{'evidence_id'},'read_evidence_batch':{'evidence_ids'}}
             if self.mode=='baseline':allowed={k:v for k,v in allowed.items() if k in ('search','read_evidence','read_evidence_batch')}
-            if action not in allowed or not isinstance(args,dict) or set(args)-allowed[action]:raise ProductError('INVALID_TOOL_PLAN','检索计划包含未授权工具或参数')
+            if not isinstance(action,str) or action not in allowed or not isinstance(args,dict) or set(args)-allowed[action]:
+                error=ProductError('INVALID_TOOL_PLAN','检索计划包含未授权工具或参数；请按允许的工具协议纠正。').as_dict()
+                entry['error']=error
+                history.append({'plan':plan,'result':error})
+                continue
             signature=json.dumps([action,args],sort_keys=True,ensure_ascii=False)
             if signature in seen_actions:
                 history.append({'plan':plan,'error':'该调用已执行，结果仍在history；请读取原文或完成回答。'});continue
