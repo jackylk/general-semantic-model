@@ -128,3 +128,36 @@ def test_local_llm_factory_rejects_remote_hosts(tmp_path,url):
     with pytest.raises(ProductError) as exc:
         LLM.from_env_file(tmp_path/'missing.env',base_url=url,model='local',allow_local=True)
     assert exc.value.code=='INVALID_CONFIG'
+
+
+def test_json_retry_recovers_malformed_response_without_relaxing_validation(monkeypatch):
+    import gsm.adapters.llm as module
+    responses=iter([
+        {'choices':[{'message':{'content':'not valid JSON'},'finish_reason':'stop'}],'usage':{'total_tokens':4}},
+        {'choices':[{'message':{'content':'{"definition": {}}'},'finish_reason':'stop'}],'usage':{'total_tokens':6}},
+    ])
+    monkeypatch.setattr(module,'post_json',lambda *args,**kwargs:next(responses))
+    model=LLM('https://example.invalid','test','dummy')
+    assert model.complete_with_json_retry('independent synthetic prompt').data=={'definition':{}}
+
+
+def test_json_retry_is_bounded_and_does_not_retry_truncation(monkeypatch):
+    import gsm.adapters.llm as module
+    responses=iter([
+        {'choices':[{'message':{'content':'{"partial":'},'finish_reason':'length'}],'usage':{'total_tokens':4}},
+        {'choices':[{'message':{'content':'{"must_not_be_used":true}'},'finish_reason':'stop'}]},
+    ])
+    monkeypatch.setattr(module,'post_json',lambda *args,**kwargs:next(responses))
+    model=LLM('https://example.invalid','test','dummy')
+    with pytest.raises(ProductError) as exc:model.complete_with_json_retry('synthetic')
+    assert exc.value.details[0]['reason']=='truncated'
+    assert next(responses)['choices'][0]['message']['content']=='{"must_not_be_used":true}'
+
+
+def test_json_retry_stops_after_two_invalid_responses(monkeypatch):
+    import gsm.adapters.llm as module
+    responses=iter([{'choices':[{'message':{'content':'invalid'},'finish_reason':'stop'}]}]*2)
+    monkeypatch.setattr(module,'post_json',lambda *args,**kwargs:next(responses))
+    with pytest.raises(ProductError) as exc:
+        LLM('https://example.invalid','test','dummy').complete_with_json_retry('synthetic')
+    assert exc.value.code=='INVALID_MODEL_OUTPUT'

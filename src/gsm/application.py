@@ -183,7 +183,7 @@ class Application:
             from .domain import DomainDefinition,validate_domain
             from .sampling import domain_samples
             sampled,sample_summary=domain_samples(blocks)
-            response=self.llm().complete(json.dumps({'task':'依据用途、问题与资料建议领域定义。返回 JSON {"definition":符合schema的领域定义,"questions":需要用户选择的业务歧义列表，每项包含问题、少量选项、推荐和理由}。不要要求用户填写schema。','purpose':payload['purpose'],'questions':payload['questions'],'schema':DomainDefinition.model_json_schema(),'untrusted_sample_blocks':sampled},ensure_ascii=False))
+            response=self.llm().complete_with_json_retry(json.dumps({'task':'依据用途、问题与资料建议领域定义。返回 JSON {"definition":符合schema的领域定义,"questions":需要用户选择的业务歧义列表，每项包含问题、少量选项、推荐和理由}。不要要求用户填写schema。','purpose':payload['purpose'],'questions':payload['questions'],'schema':DomainDefinition.model_json_schema(),'untrusted_sample_blocks':sampled},ensure_ascii=False))
             proposal=response.data
             try:validate_domain(proposal.get('definition',{}));proposal['validation']={'valid':True}
             except ProductError as error:proposal['validation']={'valid':False,'error':error.as_dict()}
