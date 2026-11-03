@@ -2,14 +2,15 @@ import pytest
 from gsm.errors import ProductError
 
 
-def test_truncated_batch_splits_at_blocks_and_resume_keeps_completed_parts():
+@pytest.mark.parametrize('reason',['truncated','empty_or_invalid_json'])
+def test_truncated_batch_splits_at_blocks_and_resume_keeps_completed_parts(reason):
     from gsm.adaptive_extraction import adaptive_extract
     blocks=[{'block_id':str(i),'text':'whole block'} for i in range(4)]
     class App:
         calls=[]
         def extract_candidates(self,kb,domain,parts,model,focus=None):
             self.calls.append([b['block_id'] for b in parts])
-            if len(parts)>2:raise ProductError('INVALID_MODEL_OUTPUT','truncated',[{'reason':'truncated','usage':{'total_tokens':9}}],True)
+            if len(parts)>2:raise ProductError('INVALID_MODEL_OUTPUT','invalid output',[{'reason':reason,'usage':{'total_tokens':9}}],True)
             return {'result':{'candidates':[{'id':b['block_id']} for b in parts]},'usage':{'total_tokens':3},'extraction_notes':[],'extraction_rejections':[]}
     app=App();state={};saved=[]
     result=adaptive_extract(app,'kb','domain',blocks,None,state,lambda:saved.append(True))

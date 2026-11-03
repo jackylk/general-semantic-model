@@ -16,14 +16,14 @@ def adaptive_extract(app,kb_id,domain_id,blocks,model,state,save,focus=None):
             try:
                 result=app.extract_candidates(kb_id,domain_id,parts,model,focus=focus)
             except ProductError as error:
-                if error.code!='INVALID_MODEL_OUTPUT' or not any(isinstance(d,dict) and d.get('reason')=='truncated' for d in error.details):raise
+                if error.code!='INVALID_MODEL_OUTPUT' or not any(isinstance(d,dict) and d.get('reason') in ('truncated','empty_or_invalid_json') for d in error.details):raise
                 for detail in error.details:
                     if isinstance(detail,dict):_add(failed,detail.get('usage',{}))
-                node['split']=True;save()
+                node['split']=True;node['reason']=next(d.get('reason') for d in error.details if isinstance(d,dict) and d.get('reason') in ('truncated','empty_or_invalid_json'));save()
             else:
                 node['result']=result;save();return result
         if len(parts)<2 or depth>=3:
-            raise ProductError('EXTRACTION_PARTITION_LIMIT','输出截断且无法安全拆分完整原文块；需调整抽取协议或结构单元，不得丢弃数据',[{'blocks':len(parts),'depth':depth,'usage':failed}],retryable=False)
+            raise ProductError('EXTRACTION_PARTITION_LIMIT','输出不完整或不合法且无法安全拆分完整原文块；需调整抽取协议或结构单元，不得丢弃数据',[{'blocks':len(parts),'depth':depth,'usage':failed}],retryable=False)
         # Whole blocks keep table rows and their locator/header associations intact.
         midpoint=len(parts)//2
         left=visit(parts[:midpoint],key+'L',depth+1);right=visit(parts[midpoint:],key+'R',depth+1)
