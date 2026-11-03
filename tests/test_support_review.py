@@ -29,14 +29,14 @@ def test_completed_review_chunks_survive_a_later_invalid_response():
         bad=True
         def complete(self,prompt,**kw):
             p=json.loads(prompt);calls.append(len(p['records']))
-            if len(calls)==2 and self.bad:return Completion({'reviews':[]},'test',{'total_tokens':3})
+            if len(calls)>=2 and self.bad:return Completion({'reviews':[]},'test',{'total_tokens':3})
             return Completion({'reviews':[{'id':r['id'],'checks':dict.fromkeys(('subject_scope','predicate_direction','value_fidelity','conditions_complete','conditions_non_circular','evidence_sufficient'),True),'supported':True} for r in p['records']]},'test',{'total_tokens':5})
     model=Model();saved=[]
     with pytest.raises(ProductError) as e:review_records(model,{},records(40),[{'block_id':'b','text':'same quote','locator':{}}],pending,lambda:saved.append(True))
     assert e.value.code=='INVALID_SUPPORT_REVIEW' and len(pending['support_reviews'])==32
     model.bad=False
     reviews,usage=review_records(model,{},records(40),[{'block_id':'b','text':'same quote','locator':{}}],pending,lambda:None)
-    assert calls==[32,8,8] and len(reviews)==40 and usage['total_tokens']==13
+    assert calls==[32,8,8,8] and len(reviews)==40 and usage['total_tokens']==16
 
 
 def test_invalid_json_review_usage_is_checkpointed_before_retry():
@@ -81,7 +81,7 @@ def test_unqualified_positive_support_verdict_is_rejected():
     pending={}
     with pytest.raises(ProductError,match='逐条覆盖'):
         review_records(Model(),{},records(1),[{'block_id':'b','text':'same quote','locator':{}}],pending,lambda:None)
-    assert pending['support_usage']['total_tokens']==9
+    assert pending['support_usage']['total_tokens']==18
     assert not pending['support_reviews']
 
 
@@ -96,3 +96,19 @@ def test_invalid_review_reports_only_aggregate_contract_diagnostics():
     assert detail['missing_check_fields']=={'subject_scope':1,'predicate_direction':1,'value_fidelity':1,'conditions_complete':1,'conditions_non_circular':1,'evidence_sufficient':1}
     assert detail['missing_record_count']==0 and detail['unexpected_record_count']==0
     assert 'private' not in str(detail)
+
+
+def test_support_contract_repair_is_bounded_metered_and_preserves_gates():
+    from gsm.support_review import review_records,SUPPORT_CHECKS
+    class Model:
+        calls=0
+        def complete(self,prompt,**kwargs):
+            self.calls+=1;packet=json.loads(prompt)
+            if self.calls==1:return Completion({'reviews':[{'id':'R0001','supported':True}]},'test',{'total_tokens':4})
+            assert packet['contract_repair']['missing_check_fields']['conditions_complete']==1
+            checks=dict.fromkeys(SUPPORT_CHECKS,True);checks['conditions_complete']=False
+            return Completion({'reviews':[{'id':'R0001','supported':True,'checks':checks}]},'test',{'total_tokens':6})
+    model=Model();pending={}
+    reviews,usage=review_records(model,{},records(1),[{'block_id':'b','text':'same quote','locator':{}}],pending,lambda:None)
+    assert model.calls==2 and usage['total_tokens']==10
+    assert reviews[0]['supported'] is False

@@ -44,25 +44,30 @@ def review_records(model,domain,records,blocks,pending,save):
                 'evidence_sufficient':'引用证据可独立支撑本记录；对象上下文不是已验证事实，缺页/歧义不能猜。'},
             'domain':domain,'source_fragments':fragments,'object_context':objects,'record_ids':list(aliases),
             'evidence_catalog':[e for e in catalog if e['id'] in required],'records':visible}
-        try:response=model.complete(json.dumps(packet,ensure_ascii=False,separators=(',',':')),max_tokens=8192)
-        except ProductError as error:
-            for detail in error.details:
-                if isinstance(detail,dict):_add_usage(usage,detail.get('usage'))
+        for attempt in range(2):
+            try:response=model.complete(json.dumps(packet,ensure_ascii=False,separators=(',',':')),max_tokens=8192)
+            except ProductError as error:
+                for detail in error.details:
+                    if isinstance(detail,dict):_add_usage(usage,detail.get('usage'))
+                save()
+                raise
+            _add_usage(usage,response.usage)
+            # Even malformed returned decisions can have billable usage.
             save()
-            raise
-        _add_usage(usage,response.usage)
-        # Even malformed returned decisions can have billable usage.
-        save()
-        reviews=response.data.get('reviews')
-        shape=isinstance(reviews,list) and all(isinstance(r,dict) and isinstance(r.get('id'),str) and isinstance(r.get('supported'),bool) and isinstance(r.get('checks'),dict) and all(type(r['checks'].get(key)) is bool for key in SUPPORT_CHECKS) for r in reviews)
-        if not shape or len(reviews)!=len(chunk) or {r['id'] for r in reviews}!=set(aliases):
-            rows=reviews if isinstance(reviews,list) else []
-            received=[r.get('id') for r in rows if isinstance(r,dict) and isinstance(r.get('id'),str)]
-            diagnostics={'expected_records':len(chunk),'returned_records':len(rows) if isinstance(reviews,list) else None,'received_type':type(reviews).__name__,
-                'missing_record_count':len(set(aliases)-set(received)),'unexpected_record_count':len(set(received)-set(aliases)),
-                'duplicate_record_count':len(received)-len(set(received)),
-                'missing_check_fields':{key:sum(not isinstance(r,dict) or not isinstance(r.get('checks'),dict) or type(r['checks'].get(key)) is not bool for r in rows) for key in SUPPORT_CHECKS}}
-            raise ProductError('INVALID_SUPPORT_REVIEW','语义复核未按短标识逐条覆盖记录',[diagnostics],retryable=True)
+            reviews=response.data.get('reviews')
+            shape=isinstance(reviews,list) and all(isinstance(r,dict) and isinstance(r.get('id'),str) and isinstance(r.get('supported'),bool) and isinstance(r.get('checks'),dict) and all(type(r['checks'].get(key)) is bool for key in SUPPORT_CHECKS) for r in reviews)
+            if not shape or len(reviews)!=len(chunk) or {r['id'] for r in reviews}!=set(aliases):
+                rows=reviews if isinstance(reviews,list) else []
+                received=[r.get('id') for r in rows if isinstance(r,dict) and isinstance(r.get('id'),str)]
+                diagnostics={'expected_records':len(chunk),'returned_records':len(rows) if isinstance(reviews,list) else None,'received_type':type(reviews).__name__,
+                    'missing_record_count':len(set(aliases)-set(received)),'unexpected_record_count':len(set(received)-set(aliases)),
+                    'duplicate_record_count':len(received)-len(set(received)),
+                    'missing_check_fields':{key:sum(not isinstance(r,dict) or not isinstance(r.get('checks'),dict) or type(r['checks'].get(key)) is not bool for r in rows) for key in SUPPORT_CHECKS}}
+                if attempt==0:
+                    packet['contract_repair']=diagnostics
+                    continue
+                raise ProductError('INVALID_SUPPORT_REVIEW','语义复核未按短标识逐条覆盖记录',[diagnostics],retryable=True)
+            break
         done.extend({'id':aliases[r['id']],'supported':r['supported'] and all(r['checks'][key] for key in SUPPORT_CHECKS),'checks':{key:r['checks'][key] for key in SUPPORT_CHECKS},'reason':r.get('reason','')} for r in reviews)
         save()
     by_id={r['id']:r for r in done}
