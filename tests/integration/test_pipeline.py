@@ -29,7 +29,7 @@ def test_pipeline_runs_all_sources_checkpoints_and_builds_cited_pages(tmp_path,m
         model='test';base_url='https://test.invalid'
         def complete(self,prompt,**kw):
             data=json.loads(prompt)
-            if data.get('task')=='check_record_support':return Completion({'reviews':[{'id':r['id'],'supported':r['kind']!='relation','reason':'test verdict'} for r in data['records']]},'test',{'total_tokens':10})
+            if data.get('task')=='check_record_support':return Completion({'reviews':[{'id':r['id'],'checks':dict.fromkeys(('subject_scope','predicate_direction','value_fidelity','conditions_complete','conditions_non_circular','evidence_sufficient'),True),'supported':r['kind']!='relation','reason':'test verdict'} for r in data['records']]},'test',{'total_tokens':10})
             assert all(not b.get('locator',{}).get('requires_review') for b in data['untrusted_source_blocks'])
             block=data['untrusted_source_blocks'][0]['block_id']
             from test_build import candidates
@@ -73,7 +73,7 @@ def test_pipeline_retry_reuses_extracted_batch_after_review_failure(build_env,mo
             counts['review']+=1
             if counts['review']==1:raise ProductError('MODEL_UNAVAILABLE','synthetic transient failure',retryable=True)
             records=json.loads(prompt)['records']
-            return Completion({'reviews':[{'id':r['id'],'supported':True,'reason':'synthetic support'} for r in records]},'test',{'total_tokens':10})
+            return Completion({'reviews':[{'id':r['id'],'checks':dict.fromkeys(('subject_scope','predicate_direction','value_fidelity','conditions_complete','conditions_non_circular','evidence_sufficient'),True),'supported':True,'reason':'synthetic support'} for r in records]},'test',{'total_tokens':10})
     monkeypatch.setattr(app,'llm',lambda:Model());monkeypatch.setattr(app,'extract_candidates',extraction)
     monkeypatch.setattr(Embedding,'embed',lambda self,texts:[[0.0]*1024 for t in texts])
     task=app.tasks.submit(p,kb,'pipeline',{'domain_version_id':dv,'source_version_ids':[source],'batch_chars':20000},'resume')
@@ -96,7 +96,7 @@ def test_pipeline_stops_before_third_batch_when_many_candidates_never_pass(tmp_p
         model='test';base_url='https://test.invalid'
         def complete(self,prompt,**kwargs):
             data=json.loads(prompt)
-            if data.get('task')=='check_record_support':return Completion({'reviews':[{'id':r['id'],'supported':False,'reason':'synthetic unsupported'} for r in data['records']]},'test',{})
+            if data.get('task')=='check_record_support':return Completion({'reviews':[{'id':r['id'],'checks':dict.fromkeys(('subject_scope','predicate_direction','value_fidelity','conditions_complete','conditions_non_circular','evidence_sufficient'),True),'supported':False,'reason':'synthetic unsupported'} for r in data['records']]},'test',{})
             counts['extract']+=1;block=data['untrusted_source_blocks'][0]['block_id']
             return Completion({'candidates':[{'kind':'object','local_id':f'o{i}','type_id':'device','identity':{'serial':'001'},'evidence':[{'block_id':block,'quote':'设备 A 序号 001'}]} for i in range(10)]},'test',{})
     monkeypatch.setattr(app,'llm',lambda:Model())
@@ -116,7 +116,7 @@ def test_pipeline_stops_binding_failure_even_when_objects_pass(tmp_path,monkeypa
         model='test';base_url='https://test.invalid'
         def complete(self,prompt,**kwargs):
             data=json.loads(prompt)
-            if data.get('task')=='check_record_support':return Completion({'reviews':[{'id':r['id'],'supported':True} for r in data['records']]},'test',{})
+            if data.get('task')=='check_record_support':return Completion({'reviews':[{'id':r['id'],'checks':dict.fromkeys(('subject_scope','predicate_direction','value_fidelity','conditions_complete','conditions_non_circular','evidence_sufficient'),True),'supported':True} for r in data['records']]},'test',{})
             bid=data['untrusted_source_blocks'][0]['block_id'];evidence=[{'block_id':bid,'quote':'设备 A 序号 001'}]
             rows=[{'kind':'object','local_id':'a','type_id':'device','identity':{'serial':'001'},'evidence':evidence}]
             rows.extend({'kind':'assertion','subject':'a','predicate':f'undeclared_{i}','value':'x','evidence':evidence} for i in range(20))
