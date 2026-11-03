@@ -26,12 +26,19 @@ def extraction_samples(blocks,max_chars):
     if not groups:return [],[]
     quota=max_chars//len(groups);selected=[];summary=[]
     for source,items in groups.items():
-        count=min(6,len(items));indices=[round(i*(len(items)-1)/(count-1)) for i in range(count)] if count>1 else [0]
-        candidates=[items[i] for i in indices]+[item for i,item in enumerate(items) if i not in indices]
+        eligible=[b for b in items if b.get('locator',{}).get('requires_review') is not True]
+        deferred=len(items)-len(eligible)
+        if not eligible:raise ProductError('NO_AUTOMATIC_SAMPLE','该来源只有待核验结构，不能作为自动抽取预览；请先核验或提供可读正文')
+        metadata={'page_number','header','footer','doc_title','index'}
+        primary=[b for b in eligible if b.get('locator',{}).get('unit_type') not in metadata and b['text'].strip()]
+        pool=primary or eligible
+        count=min(24,len(pool));indices=[round(i*(len(pool)-1)/(count-1)) for i in range(count)] if count>1 else [0]
+        candidates=[pool[i] for i in indices]+[item for i,item in enumerate(pool) if i not in indices]
         used=0;sample=[]
         for block in candidates:
-            if len(sample)>=6:break
+            if len(sample)>=24:break
             if block['text'].strip() and used+len(block['text'])<=quota:sample.append(block);used+=len(block['text'])
         if not sample:raise ProductError('SAMPLE_TOO_LARGE','单个来源无法在预览预算内选取完整块，请增大预算')
-        selected.extend(sample);summary.append({'source_version_id':source,'total_blocks':len(items),'sampled_blocks':len(sample),'sampled_characters':used})
+        selected.extend(sample);summary.append({'source_version_id':source,'total_blocks':len(items),'automatic_blocks':len(eligible),'deferred_blocks':deferred,
+            'sampled_blocks':len(sample),'sampled_characters':used,'sampling_method':'spread_complete_content_blocks_excluding_review_only','semantic_completeness':'not_proven'})
     return selected,summary

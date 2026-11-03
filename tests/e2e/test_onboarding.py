@@ -29,3 +29,26 @@ def test_unresolved_can_record_plain_language_blockers_and_reports_bad_fields():
     assert saved['state']['unresolved']==['资料预览超过单批限制，需要分批']
     with pytest.raises(ProductError) as exc:service.save(p,kb,{'made_up_field':'x'},1)
     assert any('made_up_field' in i['path'] for i in exc.value.details)
+
+
+def test_guidance_requires_topic_selection_and_records_simulated_provenance():
+    store=Store(Settings.load());store.migrate();kb=str(uuid4());p=Principal('developer',frozenset([kb]));store.create_kb(p,kb,'guided')
+    service=OnboardingService(store)
+    step=service.save(p,kb,{'purpose':'设备资料问答','questions':['适用条件是什么？'],'source_version_ids':['synthetic-source']},0)
+    assert step['next_step']=='推荐抽取主题并由用户选择'
+    step=service.save(p,kb,{'topics':['运行边界与异常处理'],'topic_selection_origin':'simulated_user'},1)
+    assert step['state']['topic_selection_origin']=='simulated_user'
+    assert step['next_step']=='分析样本，提出领域草案和少量业务选择'
+    step=service.save(p,kb,{'topics':['新主题']},2)
+    assert step['state']['topic_selection_origin']=='unconfirmed'
+    assert step['next_step']=='推荐抽取主题并由用户选择'
+
+
+def test_topic_change_archives_old_choices_instead_of_reusing_them():
+    store=Store(Settings.load());store.migrate();kb=str(uuid4());p=Principal('developer',frozenset([kb]));store.create_kb(p,kb,'topic-change')
+    service=OnboardingService(store)
+    service.save(p,kb,{'topics':['合成主题A'],'topic_selection_origin':'user','choices':{'identity':'按序号'}},0)
+    changed=service.save(p,kb,{'topics':['合成主题B']},1)
+    assert changed['state']['choices']=={}
+    assert changed['state']['choice_history'][-1]['choices']=={'identity':'按序号'}
+    assert changed['state']['topic_selection_origin']=='unconfirmed'

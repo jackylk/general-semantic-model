@@ -30,3 +30,24 @@ def test_extraction_preview_is_bounded_and_keeps_complete_selected_blocks():
     original={b['block_id']:b for b in blocks}
     assert all(b['text']==original[b['block_id']]['text'] for b in selected)
     assert len(summary)==2
+
+
+def test_preview_samples_real_content_not_page_numbers_or_unreviewed_grids():
+    from gsm.sampling import extraction_samples
+    blocks=[]
+    for i in range(100):
+        kind='page_number' if i in (0,20,40,59,79,99) else 'text'
+        blocks.append({'block_id':str(i),'source_version_id':'s','text':str(i) if kind=='page_number' else '独立合成正文，带有主体、范围与条件。'*5,'locator':{'unit_type':kind}})
+    blocks[20]={'block_id':'unreviewed','source_version_id':'s','text':'未经确认的表格关系','locator':{'unit_type':'table_row','requires_review':True}}
+    chosen,summary=extraction_samples(blocks,3000)
+    assert all(b['locator']['unit_type']!='page_number' for b in chosen)
+    assert all(not b['locator'].get('requires_review') for b in chosen)
+    assert len(chosen)>6
+    assert summary[0]['deferred_blocks']==1
+
+
+def test_preview_does_not_silently_drop_source_with_only_review_only_blocks():
+    from gsm.sampling import extraction_samples
+    blocks=[{'block_id':'b','source_version_id':'s','text':'grid','locator':{'requires_review':True}}]
+    with pytest.raises(ProductError) as exc:extraction_samples(blocks,1000)
+    assert exc.value.code=='NO_AUTOMATIC_SAMPLE'
