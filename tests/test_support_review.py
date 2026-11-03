@@ -83,3 +83,16 @@ def test_unqualified_positive_support_verdict_is_rejected():
         review_records(Model(),{},records(1),[{'block_id':'b','text':'same quote','locator':{}}],pending,lambda:None)
     assert pending['support_usage']['total_tokens']==9
     assert not pending['support_reviews']
+
+
+def test_invalid_review_reports_only_aggregate_contract_diagnostics():
+    from gsm.support_review import review_records
+    class Model:
+        def complete(self,*args,**kwargs):
+            return Completion({'reviews':[{'id':'R0001','supported':False,'reason':'private business content'}]},'test',{})
+    with pytest.raises(ProductError) as exc:
+        review_records(Model(),{},records(1),[{'block_id':'b','text':'private source','locator':{}}],{},lambda:None)
+    detail=exc.value.details[0]
+    assert detail['missing_check_fields']=={'subject_scope':1,'predicate_direction':1,'value_fidelity':1,'conditions_complete':1,'conditions_non_circular':1,'evidence_sufficient':1}
+    assert detail['missing_record_count']==0 and detail['unexpected_record_count']==0
+    assert 'private' not in str(detail)

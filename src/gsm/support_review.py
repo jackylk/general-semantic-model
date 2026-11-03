@@ -56,7 +56,13 @@ def review_records(model,domain,records,blocks,pending,save):
         reviews=response.data.get('reviews')
         shape=isinstance(reviews,list) and all(isinstance(r,dict) and isinstance(r.get('id'),str) and isinstance(r.get('supported'),bool) and isinstance(r.get('checks'),dict) and all(type(r['checks'].get(key)) is bool for key in SUPPORT_CHECKS) for r in reviews)
         if not shape or len(reviews)!=len(chunk) or {r['id'] for r in reviews}!=set(aliases):
-            raise ProductError('INVALID_SUPPORT_REVIEW','语义复核未按短标识逐条覆盖记录',[{'expected_records':len(chunk),'returned_records':len(reviews) if isinstance(reviews,list) else None,'received_type':type(reviews).__name__}],retryable=True)
+            rows=reviews if isinstance(reviews,list) else []
+            received=[r.get('id') for r in rows if isinstance(r,dict) and isinstance(r.get('id'),str)]
+            diagnostics={'expected_records':len(chunk),'returned_records':len(rows) if isinstance(reviews,list) else None,'received_type':type(reviews).__name__,
+                'missing_record_count':len(set(aliases)-set(received)),'unexpected_record_count':len(set(received)-set(aliases)),
+                'duplicate_record_count':len(received)-len(set(received)),
+                'missing_check_fields':{key:sum(not isinstance(r,dict) or not isinstance(r.get('checks'),dict) or type(r['checks'].get(key)) is not bool for r in rows) for key in SUPPORT_CHECKS}}
+            raise ProductError('INVALID_SUPPORT_REVIEW','语义复核未按短标识逐条覆盖记录',[diagnostics],retryable=True)
         done.extend({'id':aliases[r['id']],'supported':r['supported'] and all(r['checks'][key] for key in SUPPORT_CHECKS),'checks':{key:r['checks'][key] for key in SUPPORT_CHECKS},'reason':r.get('reason','')} for r in reviews)
         save()
     by_id={r['id']:r for r in done}
