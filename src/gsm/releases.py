@@ -91,3 +91,43 @@ class ReleaseService:
             return {'id':evidence_id,'release_id':release_id,'quote':row[0],'text':row[1],
                 'locator':row[2],'fingerprint':row[3],'source_version_id':str(row[4]),'parse_version_id':str(row[5]),
                 'start_offset':row[6],'end_offset':row[7]}
+
+    def read_context(self,principal,kb_id,release_id,evidence_id,before=2,after=4):
+        """Published same-parse neighbors only; never treat review-only derivatives as evidence."""
+        if not isinstance(before,int) or not isinstance(after,int) or not 0<=before<=4 or not 0<=after<=6:
+            raise ProductError('INVALID_QUERY','邻近证据范围超过限制')
+        anchor=self.read_evidence(principal,kb_id,release_id,evidence_id)
+        with self.store.transaction(principal,kb_id) as conn:
+            manifest=conn.execute('SELECT manifest FROM releases WHERE kb_id=%s AND id=%s',(kb_id,release_id)).fetchone()[0]
+            if evidence_id.startswith('block:'):bid=evidence_id[6:]
+            else:bid=conn.execute('SELECT block_id FROM evidence_links WHERE kb_id=%s AND id=%s',(kb_id,evidence_id)).fetchone()[0]
+            position=conn.execute('SELECT parse_version_id,ordinal FROM source_blocks WHERE kb_id=%s AND id=%s',(kb_id,bid)).fetchone()
+            rows=conn.execute('SELECT id,text FROM source_blocks WHERE kb_id=%s AND parse_version_id=%s AND ordinal BETWEEN %s AND %s AND id=ANY(%s::uuid[]) ORDER BY ordinal',
+                (kb_id,position[0],position[1]-before,position[1]+after,manifest.get('baseline_block_ids',[]))).fetchall()
+        result=[];size=0
+        for block_id,text in rows:
+            if str(block_id)==str(bid):continue
+            if size+len(text)>12000:continue
+            result.append(self.read_evidence(principal,kb_id,release_id,'block:'+str(block_id)));size+=len(text)
+        return result
+
+    @timed('evidence.render_page')
+    def render_source_page(self,principal,kb_id,release_id,source_version_id,page):
+        import os,subprocess
+        from pathlib import Path
+        from hashlib import sha256
+        if type(page) is not int or not 1<=page<=10000:raise ProductError('INVALID_PAGE','页码必须为正整数')
+        with self.store.transaction(principal,kb_id) as conn:
+            release=conn.execute('SELECT manifest FROM releases WHERE kb_id=%s AND id=%s',(kb_id,release_id)).fetchone()
+            if not release or source_version_id not in release[0].get('source_version_ids',[]):raise ProductError('NOT_FOUND','来源不属于该固定发布版')
+            row=conn.execute('SELECT sha256,filename FROM source_versions WHERE kb_id=%s AND id=%s',(kb_id,source_version_id)).fetchone()
+        if not row or Path(row[1]).suffix.lower()!='.pdf':raise ProductError('UNSUPPORTED_SOURCE','当前来源不是PDF')
+        path=self.store.settings.file_root/kb_id/row[0]
+        if not path.is_file() or sha256(path.read_bytes()).hexdigest()!=row[0]:raise ProductError('SOURCE_INTEGRITY','已发布来源文件缺失或哈希不一致')
+        runtime=Path(os.environ.get('GSM_PDF_PYTHON',str(Path(__file__).resolve().parents[2]/'runtime/mineru/bin/python')))
+        if not runtime.is_file():raise ProductError('RENDER_UNAVAILABLE','未配置PDF渲染运行时')
+        try:
+            result=subprocess.run([str(runtime),str(Path(__file__).with_name('adapters')/'pdf_render.py'),str(path),str(page)],capture_output=True,timeout=45,check=True)
+        except (OSError,subprocess.SubprocessError):raise ProductError('PAGE_UNAVAILABLE','页码不存在或当前PDF无法渲染') from None
+        if len(result.stdout)>8*1024*1024 or not result.stdout.startswith(b'\x89PNG\r\n\x1a\n'):raise ProductError('RENDER_FAILED','PDF预览输出无效或超过限制')
+        return {'png':result.stdout,'metadata':{'kb_id':kb_id,'release_id':release_id,'source_version_id':source_version_id,'source_sha256':row[0],'page':page,'method':'immutable_published_blob_pdfium_render','rendered_image_is_not_semantic_verification':True}}

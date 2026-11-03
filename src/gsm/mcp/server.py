@@ -65,6 +65,21 @@ def create_server(app:Application):
         return releases.read_evidence(p,kb_id,release_id,evidence_id)
 
     @tool
+    def read_evidence_context(kb_id:str,release_id:str,evidence_id:str,before:int=2,after:int=4)->dict:
+        """只读固定发布版的相邻原文与结构定位，不访问未发布或待核验块。"""
+        return {'release_id':release_id,'anchor':releases.read_evidence(p,kb_id,release_id,evidence_id),
+                'neighbors':releases.read_context(p,kb_id,release_id,evidence_id,before,after),
+                'scope':'bounded_same_parse_published_neighbors_not_full_document'}
+
+    @tool
+    def render_source_page(kb_id:str,release_id:str,source_version_id:str,page:int)->list:
+        """返回固定发布版PDF的指定页图像，供只读核验版面；不读取用户原件目录。"""
+        import base64
+        from mcp.types import TextContent,ImageContent
+        result=releases.render_source_page(p,kb_id,release_id,source_version_id,page)
+        return [TextContent(type='text',text=json.dumps(result['metadata'])),ImageContent(type='image',mimeType='image/png',data=base64.b64encode(result['png']).decode())]
+
+    @tool
     def list_wiki_pages(kb_id:str,release_id:str)->dict:
         wiki=queries.wiki(p,kb_id,release_id)
         return {'release_id':release_id,'pages':[{'path':item['path'],'title':item['title'],'record_count':len(item.get('record_ids',[]))} for item in wiki.get('pages',[])]}

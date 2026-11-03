@@ -47,7 +47,7 @@ def test_retrieval_agent_uses_tools_and_rejects_fabricated_citations(build_env):
     class ScriptedModel:
         def __init__(self): self.calls=0
         def complete(self,prompt,system='',**kwargs):
-            if system.startswith('证据一致性核验'):return Completion({'supported':True,'reasons':[]},'test',{})
+            if system.startswith('证据一致性核验'):return Completion({'supported':True,'complete':True,'reasoning_valid':True,'reasons':[]},'test',{})
             self.calls+=1
             if self.calls==1:return Completion({'action':'query_records','args':{'kind':'assertion'}},'test',{'total_tokens':5})
             if self.calls==2:return Completion({'action':'read_evidence','args':{'evidence_id':evidence}},'test',{'total_tokens':5})
@@ -68,7 +68,7 @@ def test_multi_round_evidence_context_has_bounded_budget_for_real_documents(buil
     class Model:
         def __init__(self):self.n=0
         def complete(self,*args,**kwargs):
-            if kwargs.get('system','').startswith('证据一致性核验'):return Completion({'supported':True,'reasons':[]},'test',{})
+            if kwargs.get('system','').startswith('证据一致性核验'):return Completion({'supported':True,'complete':True,'reasoning_valid':True,'reasons':[]},'test',{})
             self.n+=1
             if self.n==1:return Completion({'action':'query_records','args':{'kind':'assertion'}},'test',{'total_tokens':6000})
             if self.n==2:return Completion({'action':'read_evidence','args':{'evidence_id':evidence}},'test',{'total_tokens':7000})
@@ -112,7 +112,7 @@ def test_retrieval_uses_published_vocabulary_batches_evidence_and_rejects_bad_an
                 self.reviewed=True
                 assert data['original_blocks'][0]['source']['filename']=='a.txt'
                 assert '10.25' in data['original_blocks'][0]['text']
-                return Completion({'supported':False,'reasons':['数值或主体不受所引原文支持']},'test',{})
+                return Completion({'supported':False,'complete':True,'reasoning_valid':False,'reasons':['数值或主体不受所引原文支持']},'test',{})
             if 'domain' in data:assert any(x['id']=='power' for x in data['domain']['properties'])
             self.n+=1
             if self.n==1:return Completion({'action':'read_evidence_batch','args':{'evidence_ids':[eid]}},'test',{})
@@ -132,7 +132,7 @@ def test_retrieval_reserves_budget_to_finish_from_already_read_originals(build_e
     class Model:
         def __init__(self):self.n=0
         def complete(self,prompt,system='',**kwargs):
-            if system.startswith('证据一致性核验'):return Completion({'supported':True,'reasons':[]},'test',{})
+            if system.startswith('证据一致性核验'):return Completion({'supported':True,'complete':True,'reasoning_valid':True,'reasons':[]},'test',{})
             self.n+=1;data=json.loads(prompt)
             if self.n==1:return Completion({'action':'read_evidence','args':{'evidence_id':eid}},'test',{'total_tokens':1000})
             assert 'original_blocks' in data and 'history' not in data
@@ -156,3 +156,71 @@ def test_retrieval_does_not_spend_finish_budget_when_required_review_cannot_fit(
     model=Model();result=RetrievalService(store,model,max_tokens=10000).retrieve(p,kb,rel,'功率')
     assert result['status']=='insufficient' and result['failure_code']=='RETRIEVAL_BUDGET'
     assert result['support_check']['supported'] is False
+
+
+def test_release_context_preserves_neighboring_conditions_without_crossing_scope(build_env):
+    from gsm.sources import SourceService
+    store,b,review,p,kb,dv,block=build_env
+    src=SourceService(store);path=store.settings.source_root/'context.txt'
+    first='设备 A 序号 001。设备 B 序号 002。A 连接 B。20℃时 A 功率 10.25 W。'
+    path.write_text(first+'\n仅供试验，不适用于室外。\n未经核验的图表内容。')
+    v=src.import_file(p,kb,path.name)
+    parsed=src.save_parse(p,kb,v['id'],'synthetic-context',[
+        {'text':first,'page':1},{'text':'仅供试验，不适用于室外。','page':2},
+        {'text':'未经核验的图表内容。','page':2,'requires_review':True}])
+    items=b.ingest(p,kb,dv,candidates(parsed['blocks'][0]['id']))['candidates']
+    rel=ReleaseService(store).publish(p,kb,b.finish(p,kb,dv,[r['id'] for r in items],embed=False))
+    eid=QueryService(store).records(p,kb,rel,kind='assertion')[0]['evidence_ids'][0]
+    context=ReleaseService(store).read_context(p,kb,rel,eid)
+    assert any('不适用于室外' in x['text'] for x in context)
+    assert not any('未经核验' in x['text'] for x in context)
+    assert all(x['release_id']==rel for x in context)
+    with pytest.raises(ProductError):ReleaseService(store).read_context(p,kb,rel,'block:'+block)
+
+
+def test_retrieval_rejects_consistent_but_incomplete_answer(build_env):
+    from gsm.retrieval import RetrievalService
+    from gsm.adapters.llm import Completion
+    store,b,review,p,kb,dv,block=build_env
+    _,rel=publish(build_env);eid=QueryService(store).records(p,kb,rel,kind='assertion')[0]['evidence_ids'][0]
+    class Model:
+        def __init__(self):self.n=0
+        def complete(self,prompt,system='',**kwargs):
+            if system.startswith('证据一致性核验'):
+                return Completion({'supported':True,'complete':False,'reasoning_valid':True,'missing_aspects':['适用条件尚未覆盖'],'reasons':[]},'test',{})
+            self.n+=1
+            if self.n==1:return Completion({'action':'read_evidence','args':{'evidence_id':eid}},'test',{})
+            return Completion({'action':'finish','status':'supported','answer':'10.25 W','citations':[eid]},'test',{})
+    result=RetrievalService(store,Model(),max_rounds=2).retrieve(p,kb,rel,'功率及其适用条件？')
+    assert result['status']=='insufficient'
+    assert not result['support_check']['complete']
+
+
+def test_published_pdf_page_preview_is_version_bound(build_env):
+    import subprocess,sys
+    from pathlib import Path
+    from gsm.sources import SourceService
+    store,b,review,p,kb,dv,block=build_env
+    runtime=Path('runtime/mineru/bin/python')
+    if not runtime.exists():pytest.skip('PDF runtime not installed')
+    path=store.settings.source_root/'synthetic-layout.pdf'
+    subprocess.run([str(runtime),'-c',"from pypdf import PdfWriter;import sys;w=PdfWriter();w.add_blank_page(width=300,height=400);w.write(sys.argv[1])",str(path)],check=True)
+    source=SourceService(store);v=source.import_file(p,kb,path.name)
+    parsed=source.save_parse(p,kb,v['id'],'synthetic-pdf',[{'text':'设备 A 序号 001。设备 B 序号 002。A 连接 B。20℃时 A 功率 10.25 W。','page':1}])
+    items=b.ingest(p,kb,dv,candidates(parsed['blocks'][0]['id']))['candidates']
+    rel=ReleaseService(store).publish(p,kb,b.finish(p,kb,dv,[r['id'] for r in items],embed=False))
+    service=ReleaseService(store)
+    result=service.render_source_page(p,kb,rel,v['id'],1)
+    assert result['png'].startswith(b'\x89PNG\r\n\x1a\n')
+    assert result['metadata']['release_id']==rel
+    assert result['metadata']['source_sha256']==v['sha256']
+    import asyncio
+    from types import SimpleNamespace
+    from gsm.mcp.server import create_server
+    server=create_server(SimpleNamespace(principal=p,store=store))
+    content=asyncio.run(server.call_tool('render_source_page',{'kb_id':kb,'release_id':rel,'source_version_id':v['id'],'page':1}))
+    blocks=content[0] if isinstance(content,tuple) else content
+    assert any(getattr(x,'type',None)=='image' for x in blocks)
+    with pytest.raises(ProductError):service.render_source_page(p,kb,rel,v['id'],0)
+    other=source.import_file(p,kb,'a.txt')
+    with pytest.raises(ProductError):service.render_source_page(p,kb,rel,other['id'],1)
