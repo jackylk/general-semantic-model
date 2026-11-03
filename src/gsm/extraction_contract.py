@@ -12,6 +12,6 @@ def extraction_contract(domain):
     for field,values in [('predicate',predicates),('type_id',type_ids)]:
         schema['properties'][field]={'anyOf':[{'type':'string','enum':values},{'type':'null'}]}
     schema['properties']['conditions']={'type':'object','properties':{c['id']:{'description':f"{c.get('name') or c['id']}; value_type={c['value_type']}"} for c in d['conditions']},'additionalProperties':False}
-    keys={'id','name','description','identity','subject_types','object_types','required_conditions','value_type','units','enum_values','roles','applies_to'}
+    keys={'id','name','description','identity','subject_types','object_types','required_conditions','value_type','units','enum_values','roles','applies_to','when','conclusion'}
     emission={kind:[{k:v for k,v in item.items() if k in keys} for item in d.get(group,[])] for group,kind in [('types','object'),('properties','assertion'),('relations','relation'),('events','event'),('rules','rule')]}
     return {'schema':schema,'emission_contract':emission}

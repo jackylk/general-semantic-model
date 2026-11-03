@@ -8,9 +8,9 @@ from .errors import ProductError
 
 
 def compact_vocabulary(definition):
-    keys={'id','name','aliases','identity','value_type','subject_types','object_types','required_conditions','units','unit_aliases','enum_values'}
+    keys={'id','name','description','roles','applies_to','when','conclusion','aliases','identity','value_type','subject_types','object_types','required_conditions','units','unit_aliases','enum_values'}
     defaults={'aliases','required_conditions','units','unit_aliases','enum_values'}
-    return {group:[{key:value for key,value in item.items() if key in keys and not (key in defaults and not value)} for item in definition[group]] for group in ('types','properties','relations','conditions')}
+    return {group:[{key:value for key,value in item.items() if key in keys and not (key in defaults and not value)} for item in definition.get(group,[])] for group in ('types','properties','relations','events','rules','conditions')}
 
 
 def model_view(value):

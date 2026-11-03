@@ -104,3 +104,14 @@ def test_model_usage_ledger_marks_unreported_usage_as_unknown(tmp_path,monkeypat
     with pytest.raises(ProductError):LLM('https://example.invalid','deepseek-flash','secret').complete('private input')
     row=json.loads(target.read_text());assert row['usage_available'] is False and row['usage']=={}
     assert row['outcome']=='request_error' and 'private' not in target.read_text()
+
+
+def test_compact_vocabulary_retains_event_roles_and_rule_conditions():
+    from gsm.retrieval import compact_vocabulary
+    definition={'types':[],'properties':[],'relations':[{'id':'links','name':'链接','description':'从引用者指向被引用者','subject_types':['node'],'object_types':['node']}],'conditions':[],
+      'events':[{'id':'inspection','name':'检查','roles':[{'id':'actor','object_types':['node'],'required':True}]}],
+      'rules':[{'id':'threshold','name':'阈值','applies_to':['node'],'when':{'op':'gt','field':'temperature','value':'30'},'conclusion':'达到阈值'}]}
+    result=compact_vocabulary(definition)
+    assert result['events'][0]['roles'][0]['required']
+    assert result['rules'][0]['when']['value']=='30'
+    assert result['relations'][0]['description']=='从引用者指向被引用者'
