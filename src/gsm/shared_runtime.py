@@ -30,17 +30,24 @@ def role_policy(root,role):
     return '(version 1)(allow default)(deny file-write*)\n(allow file-write* '+''.join('(subpath '+json.dumps(str(p))+')' for p in writable)+'(literal "/dev/null"))\n'+''.join('(deny file-read* (subpath '+json.dumps(str(p))+'))\n' for p in blocked)
 
 
+def _alive(entry):
+    try:os.kill(entry['pid'],0);return True
+    except (KeyError,OSError,TypeError):return False
+
+
+def _reusable_channel(entry):
+    """A busy live server is reusable; a probe timeout is not proof of death."""
+    if not _alive(entry):return False
+    try:build_opener(ProxyHandler({})).open(entry['url'],timeout=1)
+    except HTTPError as error:return error.code==401
+    except TimeoutError:return True
+    except URLError as error:return isinstance(error.reason,TimeoutError)
+    except (KeyError,OSError,ValueError):return False
+    return False
+
+
 def healthy(state):
-    try:
-        for role in ('producer','consumer'):
-            os.kill(state[role]['pid'],0)
-            try:build_opener(ProxyHandler({})).open(state[role]['url'],timeout=1)
-            except HTTPError as error:
-                if error.code!=401:return False
-            else:return False
-        os.kill(state['worker']['pid'],0)
-        return True
-    except (KeyError,OSError,URLError):return False
+    return all(_reusable_channel(state.get(role,{})) for role in ('producer','consumer')) and _alive(state.get('worker',{}))
 
 
 def services(root):
@@ -48,20 +55,27 @@ def services(root):
     with (operator/'lock').open('a') as lock:
         fcntl.flock(lock,fcntl.LOCK_EX)
         state_file=operator/'services.json'
+        state={};started={}
         if state_file.exists():
             previous=json.loads(state_file.read_text())
-            if healthy(previous):return previous
-            _stop(previous,operator)
-        state={};env={**os.environ,'PYTHONDONTWRITEBYTECODE':'1','NO_PROXY':'127.0.0.1,localhost','no_proxy':'127.0.0.1,localhost'}
+            for role in ('producer','consumer'):
+                entry=previous.get(role,{})
+                if _reusable_channel(entry):state[role]=entry
+                elif _alive(entry):_stop({role:entry},operator)
+            if _alive(previous.get('worker',{})):state['worker']=previous['worker']
+            if len(state)==3:return state
+        env={**os.environ,'PYTHONDONTWRITEBYTECODE':'1','NO_PROXY':'127.0.0.1,localhost','no_proxy':'127.0.0.1,localhost'}
         try:
             for role in ('producer','consumer'):
+                if role in state:continue
                 token=secrets.token_urlsafe(32);tokenfile=operator/(role+'.token');tokenfile.write_text(token);tokenfile.chmod(0o600)
                 sock=socket.socket();sock.bind(('127.0.0.1',0));sock.listen();port=sock.getsockname()[1]
                 log=(operator/(role+'.log')).open('a')
                 process=subprocess.Popen([sys.executable,'-m','gsm.shared_runtime','--credentials',str(operator/(role+'.json')),'--token-file',str(tokenfile),'--fd',str(sock.fileno())],cwd=product,pass_fds=(sock.fileno(),),stdout=log,stderr=log,env={**env,'GSM_TIMING_ROLE':'developer' if role=='producer' else 'consumer'},start_new_session=True);sock.close();log.close()
-                state[role]={'pid':process.pid,'url':f'http://127.0.0.1:{port}/mcp','token':token}
-            log=(operator/'worker.log').open('a')
-            process=subprocess.Popen([sys.executable,'-m','gsm.cli','worker','--credentials',str(operator/'producer.json')],cwd=product,stdout=log,stderr=log,env={**env,'GSM_TIMING_ROLE':'worker'},start_new_session=True);log.close();state['worker']={'pid':process.pid}
+                state[role]={'pid':process.pid,'url':f'http://127.0.0.1:{port}/mcp','token':token};started[role]=state[role]
+            if 'worker' not in state:
+                log=(operator/'worker.log').open('a')
+                process=subprocess.Popen([sys.executable,'-m','gsm.cli','worker','--credentials',str(operator/'producer.json')],cwd=product,stdout=log,stderr=log,env={**env,'GSM_TIMING_ROLE':'worker'},start_new_session=True);log.close();state['worker']={'pid':process.pid};started['worker']=state['worker']
             for _ in range(100):
                 if healthy(state):break
                 time.sleep(.1)
@@ -69,7 +83,7 @@ def services(root):
             state_file.write_text(json.dumps(state));state_file.chmod(0o600)
             return state
         except BaseException:
-            _stop(state,operator);raise
+            _stop(started,operator);raise
 
 
 def _stop(state,operator):
