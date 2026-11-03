@@ -45,6 +45,11 @@ def run(app,kb_id,task_id,payload,checkpoint):
     if state.get('version') and state['version']!=version:raise ProductError('PIPELINE_VERSION_CHANGED','构建模型或产品版本已变化，请保留旧任务并创建新任务')
     state.setdefault('version',version);state.setdefault('completed_batches',[]);state.setdefault('candidate_ids',[]);state.setdefault('approved_record_ids',[]);state.setdefault('excluded_record_ids',[]);state.setdefault('usage',{})
     def save(stage):app.tasks.checkpoint(p,kb_id,task_id,stage,state)
+    def quality(selected=None):
+        from .extraction_quality import extraction_quality
+        with app.store.transaction(p,kb_id) as conn:
+            rows=conn.execute("SELECT id,kind,status,payload->'issues' FROM records WHERE kb_id=%s AND id=ANY(%s::uuid[])",(kb_id,state['candidate_ids'])).fetchall()
+        return extraction_quality([{'id':str(rid),'kind':kind,'status':status,'issues':issues or []} for rid,kind,status,issues in rows],state['approved_record_ids'],selected)
     with phase('pipeline.parse'):
         blocks=app.blocks(kb_id,source_ids)
     automatic,deferred=automatic_blocks(blocks)
@@ -80,7 +85,10 @@ def run(app,kb_id,task_id,payload,checkpoint):
         for values in (pending['extraction_usage'],usage):
             for key,value in values.items():
                 if isinstance(value,int):state['usage'][key]=state['usage'].get(key,0)+value
-        state['completed_batches'].append(index);state.pop('pending_batch',None);save('reviewed')
+        state['completed_batches'].append(index);state.pop('pending_batch',None);state['quality']=quality();save('reviewed')
+        if len(state['completed_batches'])>=2 and state['quality']['requires_extraction_correction']:
+            state['status']='needs_domain_correction';save('needs_domain_correction')
+            raise ProductError('PIPELINE_DOMAIN_MISMATCH' if state['quality']['requires_domain_correction'] else 'PIPELINE_EXTRACTION_QUALITY','至少半数候选未通过自动校验，已停止以避免仅发布对象掩盖事实抽取失败；请根据错误分布修正领域映射、抽取协议或原文证据，不得放宽门禁',[{'quality':state['quality']}])
         if len(state['completed_batches'])>=2 and len(state['candidate_ids'])>=20 and not state['approved_record_ids']:
             state['status']='needs_domain_correction';save('needs_domain_correction')
             raise ProductError('PIPELINE_NO_SUPPORTED_PROGRESS','连续批次产生多条候选但无通过项，已停止以避免无效Token消耗；请限额预览并修正领域/证据问题，不得放宽产品门禁')
@@ -104,6 +112,7 @@ def run(app,kb_id,task_id,payload,checkpoint):
     with app.store.transaction(p,kb_id) as conn:
         final_evidence=conn.execute('SELECT DISTINCT block_id FROM evidence_links WHERE kb_id=%s AND record_id=ANY(%s::uuid[])',(kb_id,selected)).fetchall()
     state['table_row_coverage']=table_row_coverage(blocks,[str(row[0]) for row in final_evidence])
+    state['quality']=quality(selected);state['extraction_validation']['semantic_quality']=state['quality']
     state['selected_record_ids']=sorted(set(selected));state['excluded_record_ids']=sorted(set(state['excluded_record_ids']))
     if not selected:save('needs_correction');raise ProductError('NO_SUPPORTED_RECORDS','没有可构建的完整且获支持记录，请查看批次缺口并修正领域或资料')
     if not state.get('build_id'):

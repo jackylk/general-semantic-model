@@ -64,7 +64,7 @@ class LLM:
         data=post_json(self.base_url+'/chat/completions',{'model':self.model,
             'messages':[{'role':'system','content':system},{'role':'user','content':prompt}],
             'response_format':{'type':'json_object'},'thinking':{'type':'disabled'},'max_tokens':output_limit},
-            {'Authorization':'Bearer '+self._api_key},timeout=self.timeout,retries=1)
+            {'Authorization':'Bearer '+self._api_key},timeout=self.timeout,retries=3)
         if not isinstance(data,dict):raise ProductError('INVALID_MODEL_OUTPUT','模型响应外层必须为对象')
         observed=data.get('usage',{}).get('prompt_tokens')
         if self._token_counter and isinstance(observed,int):

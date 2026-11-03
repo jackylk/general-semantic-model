@@ -103,3 +103,29 @@ def test_pipeline_stops_before_third_batch_when_many_candidates_never_pass(tmp_p
     task=app.tasks.submit(app.principal,kb,'pipeline',{'domain_version_id':dv,'source_version_ids':sources},'guard');result=app.execute_task(kb,task['id'])
     assert result['status']=='failed' and result['error']['code']=='PIPELINE_NO_SUPPORTED_PROGRESS'
     assert counts['extract']==2 and len(result['checkpoint']['completed_batches'])==2
+
+
+def test_pipeline_stops_binding_failure_even_when_objects_pass(tmp_path,monkeypatch):
+    from gsm.adapters.embedding import Embedding
+    monkeypatch.setattr(Embedding,'embed',lambda self,texts:[[0.0]*1024 for _ in texts])
+    info=initialize_kb(tmp_path/'kb','protocol guard');app=Application(info['roles']['producer']['credentials']);kb=info['kb_id'];dv=app.build.submit_domain(app.principal,kb,DOMAIN);sources=[]
+    for i in range(3):
+        path=tmp_path/'kb/documents'/f'{i}.txt';path.write_text('设备 A 序号 001。')
+        sources.append(app.sources.import_file(app.principal,kb,path.name)['id'])
+    class Model:
+        model='test';base_url='https://test.invalid'
+        def complete(self,prompt,**kwargs):
+            data=json.loads(prompt)
+            if data.get('task')=='check_record_support':return Completion({'reviews':[{'id':r['id'],'supported':True} for r in data['records']]},'test',{})
+            bid=data['untrusted_source_blocks'][0]['block_id'];evidence=[{'block_id':bid,'quote':'设备 A 序号 001'}]
+            rows=[{'kind':'object','local_id':'a','type_id':'device','identity':{'serial':'001'},'evidence':evidence}]
+            rows.extend({'kind':'assertion','subject':'a','predicate':f'undeclared_{i}','value':'x','evidence':evidence} for i in range(20))
+            return Completion({'candidates':rows},'test',{})
+    monkeypatch.setattr(app,'llm',lambda:Model())
+    task=app.tasks.submit(app.principal,kb,'pipeline',{'domain_version_id':dv,'source_version_ids':sources},'binding-guard')
+    done=app.execute_task(kb,task['id'])
+    assert done['status']=='failed' and done['error']['code']=='PIPELINE_DOMAIN_MISMATCH'
+    state=done['checkpoint'];assert len(state['completed_batches'])==2
+    assert state['approved_record_ids']
+    assert state['quality']['semantic_funnel']['assertion']['support_passed']==0
+    assert not state.get('build_id')

@@ -38,6 +38,20 @@ def review_evidence(items):
     return {'evidence':citations,'original_blocks':list(originals.values())}
 
 
+def validate_tool_arguments(action,args):
+    required={'search':'query','query_paths':'start','read_wiki':'page','read_evidence':'evidence_id','read_evidence_batch':'evidence_ids'}
+    for key in ('query','kind','subject','predicate','start','target','page','evidence_id'):
+        if key in args and args[key] is not None and not isinstance(args[key],str):
+            raise ProductError('INVALID_TOOL_ARGUMENT',f'{key}必须是字符串')
+    for key in ('limit','max_depth'):
+        if args.get(key) is None:args.pop(key,None)
+        elif type(args[key]) is not int:raise ProductError('INVALID_TOOL_ARGUMENT',f'{key}必须是整数，不得使用字符串或布尔值')
+    if args.get('conditions') is not None and not isinstance(args['conditions'],dict):raise ProductError('INVALID_TOOL_ARGUMENT','conditions必须是对象')
+    key=required.get(action)
+    if key and (key not in args or args[key] is None or (key!='evidence_ids' and not isinstance(args[key],str))):
+        raise ProductError('INVALID_TOOL_ARGUMENT',f'缺少有效{key}参数')
+
+
 class RetrievalService:
     def __init__(self,store,llm,max_rounds=12,max_tokens=96000,mode='semantic'):
         if mode not in ('semantic','baseline'):raise ProductError('INVALID_MODE','未知检索模式')
@@ -145,6 +159,7 @@ class RetrievalService:
                 history.append({'plan':plan,'error':'该调用已执行，结果仍在history；请读取原文或完成回答。'});continue
             seen_actions.add(signature);clock=perf_counter()
             try:
+                validate_tool_arguments(action,args)
                 if action=='search':
                     args.setdefault('limit',5);result=(query.baseline_search if self.mode=='baseline' else query.search)(principal,kb_id,release_id,**args)
                 elif action=='query_records':args.setdefault('limit',20);result=query.records(principal,kb_id,release_id,**args)

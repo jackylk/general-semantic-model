@@ -17,7 +17,7 @@ def post_json(url,payload,headers=None,timeout=30,retries=1):
                 return json.loads(raw)
         except HTTPError as exc:
             retryable=exc.code in (408,429,500,502,503,504)
-            error=ProductError('UPSTREAM_HTTP',f'模型服务返回 HTTP {exc.code}',retryable=retryable)
+            error=ProductError('UPSTREAM_HTTP',f'模型服务返回 HTTP {exc.code}',[{'http_status':exc.code,'attempt_count':attempt+1}],retryable=retryable)
         except (URLError,TimeoutError,OSError):
             error=ProductError('UPSTREAM_UNAVAILABLE','模型服务连接失败或超时',retryable=True)
         except (ValueError,UnicodeError):

@@ -224,3 +224,19 @@ def test_published_pdf_page_preview_is_version_bound(build_env):
     with pytest.raises(ProductError):service.render_source_page(p,kb,rel,v['id'],0)
     other=source.import_file(p,kb,'a.txt')
     with pytest.raises(ProductError):service.render_source_page(p,kb,rel,other['id'],1)
+
+
+def test_retrieval_repairs_bad_tool_argument_instead_of_failing_entire_question(build_env):
+    from gsm.retrieval import RetrievalService
+    from gsm.adapters.llm import Completion
+    store,b,_,p,kb,_,_=build_env;_,release=publish(build_env)
+    class Model:
+        def __init__(self):self.n=0
+        def complete(self,*args,**kwargs):
+            self.n+=1
+            if self.n==1:return Completion({'action':'search','args':{'query':'synthetic','limit':'five'}},'test',{})
+            return Completion({'action':'finish','answer':'资料不足','status':'insufficient','citations':[]},'test',{})
+    result=RetrievalService(store,Model(),max_rounds=3).retrieve(p,kb,release,'合成问题')
+    assert result['status']=='insufficient'
+    assert result['trace'][0]['error']['code']=='INVALID_TOOL_ARGUMENT'
+    assert not result['trace'][0]['executed']

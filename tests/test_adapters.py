@@ -161,3 +161,15 @@ def test_json_retry_stops_after_two_invalid_responses(monkeypatch):
     with pytest.raises(ProductError) as exc:
         LLM('https://example.invalid','test','dummy').complete_with_json_retry('synthetic')
     assert exc.value.code=='INVALID_MODEL_OUTPUT'
+
+
+def test_llm_recovers_from_two_transient_503s(endpoint,monkeypatch):
+    import gsm.adapters.http as transport
+    monkeypatch.setattr(transport.time,'sleep',lambda _:None)
+    url,handler=endpoint;statuses=iter([503,503,200])
+    def post(self):
+        self.rfile.read(int(self.headers['Content-Length']))
+        self.send_response(next(statuses));self.end_headers()
+        self.wfile.write(json.dumps({'choices':[{'message':{'content':'{"ok":true}'},'finish_reason':'stop'}],'usage':{'total_tokens':4}}).encode())
+    monkeypatch.setattr(handler,'do_POST',post)
+    assert LLM(url,'test','dummy',allow_local=True).complete('synthetic').data=={'ok':True}

@@ -88,12 +88,13 @@ class Application:
         aliases={f'B{i+1:04d}':block['block_id'] for i,block in enumerate(blocks)}
         from .source_context import source_context
         visible=[{**source_context(block),'block_id':f'B{i+1:04d}'} for i,block in enumerate(blocks)]
-        schema=Candidate.model_json_schema()
-        schema['properties']['conditions']={'type':'object','properties':{c.id:{'description':f'{c.name or c.id}; value_type={c.value_type}'} for c in domain.conditions},'additionalProperties':False}
+        from .extraction_contract import extraction_contract
+        contract=extraction_contract(domain);schema=contract['schema']
         schema['$defs']['EvidenceInput']['properties']['block_id']['enum']=list(aliases)
         prompt={'task':'抽取语义候选，返回 JSON 对象 {"candidates":[]}。先列 object，再列 assertion/relation/event/rule。local_id 用于批次内引用；identity 只含领域身份属性。evidence 必须是数组，每项是输入块 block_id 短标识和逐字 quote，不能写页码或编造块 ID。quantity 必须是 {"value":"10.25","unit":"W"}。decimal 用十进制字符串。缺失条件不得猜测。',
-            'domain':domain.model_dump(mode='json'),'candidate_schema':schema,'untrusted_source_blocks':visible}
+            'domain':domain.model_dump(mode='json'),'candidate_schema':schema,'emission_contract':contract['emission_contract'],'untrusted_source_blocks':visible}
         prompt['document_structure_policy']='每个 table_row 块含表头和完整数据行，逐行检查领域内事实，不能因正文重复第一行就漏掉其他行。context_before/context_after 仅为邻近上下文，不自动视为该表的标题或脚注。可确认属于当前表的标题/脚注条件必须随每行保留，不只生成独立说明。conditions 不限于 required_conditions；其他已声明且明确适用的条件也必须保留。原文未明确主体归属的公式、限制、误差不得挂到最近对象；无法定位归属的内容写入 extraction_notes，不生成 subject 为空或伪指向的断言。conditions 只能使用当前领域声明的条件名；不能表达的范围写入 extraction_notes，不能发明条件名。native_layout_inference 是解析候选结构，不是已核实业务事实。provenance 仅使用 source_statement/observation/calculation/inference；table_row 和 native_layout_inference 是解析表示标签，不是 provenance。空图片/公式由覆盖报告反映，不得补造。'
+        prompt['reference_policy']='kind仅使用schema列出的类型；predicate必须严格使用对应kind的emission_contract.id，不得翻译或发明字段名。对象先定义local_id，所有subject/object/participants只能引用本批已定义local_id或明确提供的已知对象ID；不能把名字当ID。关系要核对声明语义、方向、端点类型和条件，不因两对象共现就连边。领域无法表达的内容放extraction_notes，供建库者修正领域，不能硬套相近谓词或丢弃真实条件。'
         if focus is not None:
             if not isinstance(focus,str) or not focus.strip() or len(focus)>4000:raise ProductError('INVALID_FOCUS','抽取重点必须为不超过4000字符的文本')
             prompt['extraction_focus']=focus
@@ -153,7 +154,9 @@ class Application:
                 from .review import ReviewService
                 ReviewService(self.store).decide(self.principal,kb_id,[c['id'] for c in result['candidates']],'reject','系统自动纠错替代本次尝试，非人工业务确认')
             prompt['repair']={'instruction':'按具体错误修正整个候选批次。不能补造证据或身份；资料无法确定的保留未决。','previous_candidates':raw,'errors':invalid}
-        return {'result':result,'usage':usage,'model':response.model,'attempts':len(attempts),'attempt_log':attempts,'coverage':'partial_structural_validation' if final_rejections else ('empty' if not result['candidates'] else 'candidates_returned'),'extraction_rejections':final_rejections,'extraction_notes':response.data.get('extraction_notes',[])}
+        from .extraction_quality import extraction_quality
+        quality=extraction_quality(result['candidates'],[])
+        return {'quality':quality,'result':result,'usage':usage,'model':response.model,'attempts':len(attempts),'attempt_log':attempts,'coverage':'partial_structural_validation' if final_rejections else ('empty' if not result['candidates'] else 'candidates_returned'),'extraction_rejections':final_rejections,'extraction_notes':response.data.get('extraction_notes',[])}
 
     @timed('task.execute')
     def execute_task(self,kb_id,task_id):
